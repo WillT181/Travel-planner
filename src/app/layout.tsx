@@ -1,6 +1,14 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import Navbar from "@/components/nav/Navbar";
+import Footer from "@/components/layout/Footer";
 import "@/styles/globals.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: {
@@ -8,7 +16,7 @@ export const metadata: Metadata = {
     template: "%s | Wanderly",
   },
   description:
-    "Wanderly helps you discover destinations, build itineraries, and organise all your travel plans in one place.",
+    "Discover destinations, build day-by-day itineraries, and keep every travel plan beautifully organised — all in one place.",
 };
 
 export default function RootLayout({
@@ -17,15 +25,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className="min-h-dvh">
+    <html lang="en" className={inter.variable}>
+      <body className="flex min-h-dvh flex-col">
         <Navbar />
         <main
           id="main-content"
-          className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8"
+          className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8"
         >
           {children}
         </main>
+        <Footer />
       </body>
     </html>
   );

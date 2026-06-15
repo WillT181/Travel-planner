@@ -10,6 +10,9 @@ out/
 .env.local
 .env.*.local
 
+# Generated visual preview (regenerate with `npm run preview`)
+preview/
+
 # OS
 .DS_Store
 

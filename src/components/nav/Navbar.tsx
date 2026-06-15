@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/Button";
 
 const NAV_LINKS = [
-  { href: "/search", label: "Explore" },
+  { href: "/explore", label: "Explore" },
   { href: "/inspiration", label: "Inspiration" },
   { href: "/pricing", label: "Pricing" },
 ] as const;

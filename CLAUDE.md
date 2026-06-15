@@ -35,11 +35,16 @@ src/
     onboarding/page.tsx         # /onboarding — 3-step wizard (auth-guarded)
     onboarding/actions.ts       # saveOnboarding server action → user_profiles
     dashboard/page.tsx          # /dashboard — protected landing + sign out
+    explore/page.tsx            # /explore — destination browser (search+filter)
+    explore/[destination]/page.tsx  # /explore/:slug — destination detail (SSG)
+    trip/[id]/page.tsx          # /trip/:id — created trip (protected)
     auth/callback/route.ts      # GET — OAuth/email code → session exchange
     api/
       places/
         autocomplete/route.ts        # POST — Places autocomplete proxy
         details/[placeId]/route.ts   # GET  — Place details proxy
+  data/
+    destinations.ts             # 16 seed destinations + helpers (Mood, etc.)
   middleware.ts                 # Session refresh + protected-route gate
   components/
     nav/
@@ -261,3 +266,27 @@ themselves server-side as defence-in-depth.
 **Open-redirect safety**: `returnTo` / `next` are only honoured when they are
 same-site relative paths (start with `/`, not `//`) — enforced in the login
 page, `signInWithEmail`, `signInWithGoogle`, and the callback handler.
+
+## Destination Explorer
+
+`/explore` and `/explore/[destination]` are driven entirely by
+`src/data/destinations.ts` (16 seed destinations) — no external API.
+
+- **`/explore`** — server page passes `DESTINATIONS` to the `ExploreBrowser`
+  client component, which does client-side search (name/country) + mood-pill
+  filtering (All / Beach / City / Adventure / Culture / Budget) over a
+  responsive card grid. Cards show image, name, country, mood tags, and best
+  time to visit.
+- **`/explore/[destination]`** — statically generated (`generateStaticParams`)
+  for SEO/perf: hero, Quick Facts row, a free 3-day `ItineraryTimeline`
+  (Morning/Afternoon/Evening), a locked 7-day `LockedItineraryCard`, and a
+  `StartPlanningButton`.
+- **Auth-aware locked card**: to keep the page static, `LockedItineraryCard`
+  reads the session in the browser (`supabase.auth.getSession()`). Logged-out
+  → sign-up modal (`/signup?returnTo=/explore/<slug>`); logged-in (free plan)
+  → upgrade modal (`/pricing`). There is no Pro tier yet, so any signed-in
+  user is treated as free.
+- **Start planning**: `createTrip(slug)` server action — logged-out users are
+  redirected to sign-up (returning to the destination); logged-in users get a
+  row inserted into the `trips` table (migration `0002_trips.sql`, per-user
+  RLS) and are redirected to `/trip/[id]` (a protected stub page).

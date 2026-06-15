@@ -348,3 +348,45 @@ added to the `supabase_realtime` publication in the migration.
   `edit_requested`, surfaced to the owner in settings).
 - `/invite/[token]`: public acceptance page — previews the invite, prompts
   sign-up/login when logged out, accept/decline when the email matches.
+
+## Billing (Stripe)
+
+Pro is sold via Stripe Checkout (subscription mode). Schema additions live in
+`supabase/migrations/0006_stripe_billing.sql` (adds `stripe_customer_id` +
+`stripe_subscription_id` to `user_profiles`, and an `auth.users` trigger that
+creates a profile row on sign-up).
+
+### Environment (server-only)
+
+```bash
+STRIPE_SECRET_KEY=sk_...
+STRIPE_WEBHOOK_SECRET=whsec_...          # from `stripe listen` / dashboard endpoint
+STRIPE_PRICE_MONTHLY=price_...           # Pro monthly recurring price
+STRIPE_PRICE_ANNUAL=price_...            # Pro annual recurring price
+SUPABASE_SERVICE_ROLE_KEY=...            # used ONLY by the webhook (bypasses RLS)
+```
+
+All billing code degrades gracefully when `STRIPE_SECRET_KEY` is unset
+(`isStripeConfigured()`), so the app builds and runs without Stripe configured.
+
+### Flow
+
+- **Customer creation**: `ensureStripeCustomer()` (in `lib/stripe/actions.ts`)
+  is called on email sign-up and again (idempotently) at checkout, storing
+  `stripe_customer_id` on the profile.
+- **Checkout**: `/pricing` → `createCheckoutSession(interval)` server action →
+  hosted Stripe Checkout → success redirects to `/dashboard?upgraded=true`
+  (congrats banner), cancel returns to `/pricing`.
+- **Webhook** (`/api/stripe/webhook`, nodejs runtime, raw-body signature
+  verify): `checkout.session.completed` → plan `pro` + store subscription id;
+  `customer.subscription.deleted` → plan `free`; `invoice.payment_failed` →
+  `sendPaymentFailedEmail` via Resend. Updates run with the service-role admin
+  client keyed on `stripe_customer_id`.
+- **Billing portal**: `/account/billing` shows plan + next billing date (read
+  live from Stripe) and a "Manage billing" button →
+  `createBillingPortalSession()` → Stripe Customer Portal.
+
+### Pricing config
+
+`lib/stripe/config.ts` is the single source of truth for amounts (£7/mo,
+£59/yr ~30% off) and maps intervals to the price-ID env vars.

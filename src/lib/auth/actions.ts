@@ -3,6 +3,8 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { isStripeConfigured } from "@/lib/stripe/server";
+import { ensureStripeCustomer } from "@/lib/stripe/actions";
 
 export interface AuthFormState {
   error?: string;
@@ -58,6 +60,19 @@ export async function signUpWithEmail(
 
   // If email confirmation is disabled, a session is returned immediately.
   if (data.session) {
+    // Best-effort: provision a Stripe customer on sign-up. Never block the
+    // flow if Stripe is unconfigured or the call fails — checkout re-ensures it.
+    if (data.user && isStripeConfigured()) {
+      try {
+        await ensureStripeCustomer(
+          supabase,
+          data.user.id,
+          data.user.email ?? null
+        );
+      } catch {
+        // ignore — created lazily at checkout
+      }
+    }
     redirect("/onboarding");
   }
 

@@ -103,3 +103,66 @@ export async function sendInviteEmail(
     };
   }
 }
+
+// ── Generic sender + payment-failure email ───────────────────────────────────
+
+async function sendEmail(
+  to: string,
+  subject: string,
+  html: string
+): Promise<SendResult> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return { sent: false, error: "RESEND_API_KEY not configured" };
+  const from = process.env.RESEND_FROM ?? "Wanderly <onboarding@resend.dev>";
+
+  try {
+    const res = await fetch(RESEND_ENDPOINT, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ from, to: [to], subject, html }),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { sent: false, error: `Resend ${res.status}: ${detail}` };
+    }
+    return { sent: true };
+  } catch (err) {
+    return {
+      sent: false,
+      error: err instanceof Error ? err.message : "network error",
+    };
+  }
+}
+
+export async function sendPaymentFailedEmail(
+  to: string,
+  manageUrl: string
+): Promise<SendResult> {
+  const html = `<!doctype html>
+<html>
+  <body style="margin:0;background:#f8fafc;font-family:Inter,Arial,sans-serif;color:#0f172a;">
+    <div style="max-width:480px;margin:0 auto;padding:32px 24px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:24px;">
+        <span style="width:10px;height:10px;border-radius:999px;background:#f59e0b;display:inline-block;"></span>
+        <span style="font-weight:800;font-size:18px;color:#0f766e;">Wanderly</span>
+      </div>
+      <div style="background:#fff;border:1px solid #fecaca;border-radius:16px;padding:28px;">
+        <h1 style="margin:0 0 8px;font-size:20px;color:#b91c1c;">We couldn't process your payment</h1>
+        <p style="margin:0 0 20px;color:#475569;line-height:1.6;">
+          Your most recent Wanderly Pro payment failed. To keep your Pro
+          features active, please update your payment method.
+        </p>
+        <a href="${manageUrl}"
+           style="display:inline-block;background:#0d9488;color:#fff;text-decoration:none;
+                  font-weight:600;padding:12px 22px;border-radius:10px;">
+          Update payment method
+        </a>
+      </div>
+    </div>
+  </body>
+</html>`;
+  return sendEmail(to, "Action needed: your Wanderly Pro payment failed", html);
+}

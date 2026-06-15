@@ -1,10 +1,11 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
+import { headers, cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { isStripeConfigured } from "@/lib/stripe/server";
 import { ensureStripeCustomer } from "@/lib/stripe/actions";
+import { recordReferral } from "@/lib/referrals/actions";
 
 export interface AuthFormState {
   error?: string;
@@ -73,6 +74,20 @@ export async function signUpWithEmail(
         // ignore — created lazily at checkout
       }
     }
+
+    // Attribute the referral, if this sign-up came through a referral link.
+    const ref =
+      String(formData.get("ref") ?? "").trim() ||
+      cookies().get("wl_ref")?.value ||
+      "";
+    if (ref) {
+      try {
+        await recordReferral(ref);
+      } catch {
+        // non-fatal — onboarding completion will retry attribution
+      }
+    }
+
     redirect("/onboarding");
   }
 

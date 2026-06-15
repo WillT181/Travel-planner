@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { recordReferral } from "@/lib/referrals/actions";
 
 /**
  * OAuth / email-confirmation callback. Exchanges the `code` for a session
@@ -20,6 +21,15 @@ export async function GET(request: NextRequest) {
     const supabase = createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
+      // Attribute a referral captured in the wl_ref cookie (OAuth sign-ups).
+      const ref = request.cookies.get("wl_ref")?.value;
+      if (ref) {
+        try {
+          await recordReferral(ref);
+        } catch {
+          // non-fatal — onboarding completion retries attribution
+        }
+      }
       return NextResponse.redirect(`${origin}${next}`);
     }
   }

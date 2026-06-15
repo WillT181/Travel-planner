@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 export default function SignupPage({
   searchParams,
 }: {
-  searchParams: { error?: string };
+  searchParams: { error?: string; ref?: string };
 }) {
   return (
     <div className="mx-auto flex w-full max-w-md flex-col py-8 sm:py-12">
@@ -22,8 +22,19 @@ export default function SignupPage({
         </p>
       </div>
 
+      {searchParams.ref ? (
+        <p className="mb-5 rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-center text-sm text-primary-800">
+          🎁 You were invited by a friend — sign up and you&apos;re both set up
+          for rewards.
+        </p>
+      ) : null}
+
       <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm sm:p-8">
-        <AuthForm mode="signup" initialError={searchParams.error} />
+        <AuthForm
+          mode="signup"
+          initialError={searchParams.error}
+          refCode={searchParams.ref}
+        />
       </div>
     </div>
   );

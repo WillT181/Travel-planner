@@ -79,20 +79,30 @@ async function BudgetContent({
 }) {
   const supabase = createClient();
 
-  const [{ data: budgetRow }, { data: expenseRows }] = await Promise.all([
-    supabase
-      .from("trip_budget")
-      .select("trip_id, total_budget, currency, category_budgets")
-      .eq("trip_id", tripId)
-      .single(),
-    supabase
-      .from("expenses")
-      .select(
-        "id, trip_id, category, description, amount_local, currency_local, amount_gbp, date, added_by_user_id, created_at"
-      )
-      .eq("trip_id", tripId)
-      .order("date", { ascending: false }),
-  ]);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const [{ data: budgetRow }, { data: expenseRows }, { data: profile }] =
+    await Promise.all([
+      supabase
+        .from("trip_budget")
+        .select("trip_id, total_budget, currency, category_budgets")
+        .eq("trip_id", tripId)
+        .single(),
+      supabase
+        .from("expenses")
+        .select(
+          "id, trip_id, category, description, amount_local, currency_local, amount_gbp, date, added_by_user_id, created_at"
+        )
+        .eq("trip_id", tripId)
+        .order("date", { ascending: false }),
+      supabase
+        .from("user_profiles")
+        .select("currency")
+        .eq("id", user?.id ?? "")
+        .single(),
+    ]);
 
   const budget: TripBudget = budgetRow
     ? {
@@ -122,6 +132,7 @@ async function BudgetContent({
         endDate={trip.end_date ?? null}
         budget={budget}
         expenses={expenses}
+        defaultCurrency={profile?.currency ?? "GBP"}
       />
     </div>
   );

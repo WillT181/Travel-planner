@@ -16,6 +16,8 @@ interface AuthFormProps {
   returnTo?: string;
   /** Surfaced from the ?error= query param after an OAuth failure. */
   initialError?: string;
+  /** Referral code from ?ref= — attributed on sign-up (signup mode only). */
+  refCode?: string;
 }
 
 const initialState: AuthFormState = {};
@@ -24,6 +26,7 @@ export default function AuthForm({
   mode,
   returnTo,
   initialError,
+  refCode,
 }: AuthFormProps) {
   const isSignup = mode === "signup";
   const action = isSignup ? signUpWithEmail : signInWithEmail;
@@ -56,6 +59,10 @@ export default function AuthForm({
       <form action={formAction} className="space-y-4">
         {!isSignup && returnTo ? (
           <input type="hidden" name="returnTo" value={returnTo} />
+        ) : null}
+
+        {isSignup && refCode ? (
+          <input type="hidden" name="ref" value={refCode} />
         ) : null}
 
         <div>

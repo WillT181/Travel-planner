@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 /** Route prefixes that require an authenticated user. */
-const PROTECTED_PREFIXES = ["/dashboard", "/trip", "/account"];
+const PROTECTED_PREFIXES = ["/dashboard", "/trip", "/account", "/refer"];
 
 function isProtectedPath(pathname: string): boolean {
   return PROTECTED_PREFIXES.some(
@@ -47,6 +47,17 @@ export async function updateSession(
   } = await supabase.auth.getUser();
 
   const { pathname, search } = request.nextUrl;
+
+  // Capture a referral code (?ref=CODE) into a cookie so it survives sign-up,
+  // including the OAuth round-trip away from the site. Read back at onboarding.
+  const ref = request.nextUrl.searchParams.get("ref");
+  if (ref && /^[A-Za-z0-9]{4,16}$/.test(ref)) {
+    supabaseResponse.cookies.set("wl_ref", ref.toUpperCase(), {
+      maxAge: 60 * 60 * 24 * 30,
+      path: "/",
+      sameSite: "lax",
+    });
+  }
 
   if (!user && isProtectedPath(pathname)) {
     const url = request.nextUrl.clone();

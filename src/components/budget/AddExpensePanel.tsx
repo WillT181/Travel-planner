@@ -15,16 +15,18 @@ export default function AddExpensePanel({
   onClose,
   onSubmit,
   isPending,
+  defaultCurrency = "GBP",
 }: {
   open: boolean;
   onClose: () => void;
   onSubmit: (input: ExpenseInput) => void;
   isPending: boolean;
+  defaultCurrency?: string;
 }) {
   const { rates, source } = useFxRates();
 
   const [amount, setAmount] = useState("");
-  const [currency, setCurrency] = useState<string>("GBP");
+  const [currency, setCurrency] = useState<string>(defaultCurrency);
   const [category, setCategory] = useState<Category>("Food & drink");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(todayIso());
@@ -33,12 +35,12 @@ export default function AddExpensePanel({
   useEffect(() => {
     if (open) {
       setAmount("");
-      setCurrency("GBP");
+      setCurrency(defaultCurrency);
       setCategory("Food & drink");
       setDescription("");
       setDate(todayIso());
     }
-  }, [open]);
+  }, [open, defaultCurrency]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

@@ -27,6 +27,7 @@ interface Props {
   endDate: string | null;
   budget: TripBudget;
   expenses: Expense[];
+  defaultCurrency?: string;
 }
 
 export default function BudgetDashboard({
@@ -37,6 +38,7 @@ export default function BudgetDashboard({
   endDate,
   budget,
   expenses,
+  defaultCurrency = "GBP",
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -195,6 +197,7 @@ export default function BudgetDashboard({
         onClose={() => setPanelOpen(false)}
         onSubmit={handleAddExpense}
         isPending={isPending}
+        defaultCurrency={defaultCurrency}
       />
     </>
   );

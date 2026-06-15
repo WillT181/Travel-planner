@@ -1,7 +1,12 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import {
+  recordReferral,
+  completeReferralAndReward,
+} from "@/lib/referrals/actions";
 
 export type TravelCompanions = "solo" | "couple" | "family" | "group";
 
@@ -45,6 +50,17 @@ export async function saveOnboarding(
 
   if (error) {
     return { error: "We couldn't save your answers. Please try again." };
+  }
+
+  // Referral attribution + reward. Best-effort: a failure here must never block
+  // a user from finishing onboarding.
+  try {
+    const ref = cookies().get("wl_ref")?.value;
+    if (ref) await recordReferral(ref); // safety net if not yet attributed
+    await completeReferralAndReward();
+    cookies().delete("wl_ref");
+  } catch {
+    // ignore — reward can be reconciled later
   }
 
   redirect("/dashboard");

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getUserPlan } from "@/lib/auth/plan";
 import { getDestination } from "@/data/destinations";
 import type { TimeOfDay } from "@/types/trip";
 
@@ -78,6 +79,130 @@ export async function createTrip(
   }
 
   redirect(`/trip/${data.id}`);
+}
+
+// ── deleteTrip ───────────────────────────────────────────────────────────────
+
+export async function deleteTrip(tripId: string): Promise<ActionResult> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated." };
+
+  // RLS delete policy already restricts this to the trip owner.
+  const { error } = await supabase
+    .from("trips")
+    .delete()
+    .eq("id", tripId)
+    .eq("user_id", user.id);
+
+  if (error) return { error: "Couldn't delete that trip." };
+
+  revalidatePath("/dashboard");
+  return {};
+}
+
+// ── duplicateTrip ──────────────────────────────────────────────────────────
+
+export async function duplicateTrip(tripId: string): Promise<ActionResult> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated." };
+
+  // Free users are capped at FREE_MAX_TRIPS total.
+  const plan = await getUserPlan(supabase);
+  if (plan !== "pro") {
+    const { count } = await supabase
+      .from("trips")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id);
+    if ((count ?? 0) >= FREE_MAX_TRIPS) {
+      redirect("/pricing?reason=trip_limit");
+    }
+  }
+
+  // Read the source trip (RLS allows owners + members to view it).
+  const { data: source } = await supabase
+    .from("trips")
+    .select(
+      `
+      destination_slug, destination_name, country, title,
+      start_date, end_date, traveller_count,
+      trip_days ( day_number, date, label,
+        activities ( time_of_day, title, notes, duration_mins, cost, sort_order )
+      )
+    `
+    )
+    .eq("id", tripId)
+    .single();
+
+  if (!source) return { error: "That trip no longer exists." };
+
+  const { data: created, error: tripError } = await supabase
+    .from("trips")
+    .insert({
+      user_id: user.id,
+      destination_slug: source.destination_slug,
+      destination_name: source.destination_name,
+      country: source.country,
+      title: source.title ? `${source.title} (copy)` : null,
+      start_date: source.start_date,
+      end_date: source.end_date,
+      traveller_count: source.traveller_count ?? 1,
+      status: "planning",
+    })
+    .select("id")
+    .single();
+
+  if (tripError || !created) return { error: "Couldn't duplicate that trip." };
+
+  // Recreate days, then activities mapped onto their new day ids.
+  const days = (source.trip_days ?? []) as {
+    day_number: number;
+    date: string | null;
+    label: string | null;
+    activities: {
+      time_of_day: string;
+      title: string;
+      notes: string | null;
+      duration_mins: number | null;
+      cost: number | null;
+      sort_order: number;
+    }[];
+  }[];
+
+  for (const day of days) {
+    const { data: newDay } = await supabase
+      .from("trip_days")
+      .insert({
+        trip_id: created.id,
+        day_number: day.day_number,
+        date: day.date,
+        label: day.label,
+      })
+      .select("id")
+      .single();
+
+    if (newDay && day.activities.length > 0) {
+      await supabase.from("activities").insert(
+        day.activities.map((a) => ({
+          trip_day_id: newDay.id,
+          time_of_day: a.time_of_day,
+          title: a.title,
+          notes: a.notes,
+          duration_mins: a.duration_mins,
+          cost: a.cost,
+          sort_order: a.sort_order,
+        }))
+      );
+    }
+  }
+
+  revalidatePath("/dashboard");
+  redirect(`/trip/${created.id}`);
 }
 
 // ── addDay ───────────────────────────────────────────────────────────────────

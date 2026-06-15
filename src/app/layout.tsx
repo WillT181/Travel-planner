@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Navbar from "@/components/nav/Navbar";
 import Footer from "@/components/layout/Footer";
+import CookieConsent from "@/components/consent/CookieConsent";
+import Analytics from "@/components/consent/Analytics";
 import "@/styles/globals.css";
 
 const inter = Inter({
@@ -27,6 +29,12 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <body className="flex min-h-dvh flex-col">
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-primary-600 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white"
+        >
+          Skip to content
+        </a>
         <Navbar />
         <main
           id="main-content"
@@ -35,6 +43,8 @@ export default function RootLayout({
           {children}
         </main>
         <Footer />
+        <CookieConsent />
+        <Analytics />
       </body>
     </html>
   );

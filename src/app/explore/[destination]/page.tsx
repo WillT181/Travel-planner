@@ -22,8 +22,13 @@ export function generateMetadata({ params }: PageProps): Metadata {
   const destination = getDestination(params.destination);
   if (!destination) return { title: "Destination not found" };
   return {
-    title: `${destination.name}, ${destination.country}`,
-    description: destination.summary,
+    title: `${destination.name} Travel Guide — ${destination.country}`,
+    description: `Plan your trip to ${destination.name}. ${destination.summary} Best time to visit: ${destination.bestTimeToVisit}.`,
+    openGraph: {
+      title: `${destination.name} Travel Guide`,
+      description: destination.summary,
+      type: "website",
+    },
   };
 }
 

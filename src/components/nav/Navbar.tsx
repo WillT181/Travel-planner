@@ -142,7 +142,7 @@ export default function Navbar() {
               Log in
             </Link>
             <Link
-              href="/itinerary"
+              href="/signup"
               className={buttonVariants({ variant: "primary" })}
             >
               Plan for free
@@ -244,7 +244,7 @@ export default function Navbar() {
             Log in
           </Link>
           <Link
-            href="/itinerary"
+            href="/signup"
             onClick={close}
             className={buttonVariants({
               variant: "primary",

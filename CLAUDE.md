@@ -30,10 +30,17 @@ src/
     itinerary/[id]/page.tsx     # /itinerary/:id — Trip detail view
     map/page.tsx                # /map — Map view
     trips/page.tsx              # /trips — Saved trips list
+    login/page.tsx              # /login — email+password + Google OAuth
+    signup/page.tsx             # /signup — email+password + Google OAuth
+    onboarding/page.tsx         # /onboarding — 3-step wizard (auth-guarded)
+    onboarding/actions.ts       # saveOnboarding server action → user_profiles
+    dashboard/page.tsx          # /dashboard — protected landing + sign out
+    auth/callback/route.ts      # GET — OAuth/email code → session exchange
     api/
       places/
         autocomplete/route.ts        # POST — Places autocomplete proxy
         details/[placeId]/route.ts   # GET  — Place details proxy
+  middleware.ts                 # Session refresh + protected-route gate
   components/
     nav/
       Navbar.tsx                # Sticky top nav with mobile hamburger drawer
@@ -42,6 +49,12 @@ src/
     ui/
       Button.tsx                # Button component + buttonVariants helper
       Card.tsx                  # Card component (default / elevated / flat)
+    auth/
+      AuthForm.tsx              # Login/signup form (useFormState + server action)
+      GoogleButton.tsx          # "Continue with Google" OAuth form button
+      SubmitButton.tsx          # useFormStatus pending-aware submit button
+      OnboardingWizard.tsx      # 3-step client wizard (no reloads)
+      SignOutButton.tsx         # Sign-out form → signOut action
     search/
       SearchBar.tsx             # Combobox input (icon, spinner, Esc-to-clear)
       SearchResults.tsx         # Autocomplete dropdown (keyboard nav)
@@ -50,6 +63,11 @@ src/
     usePlacesSearch.ts          # Debounced (350ms) autocomplete fetch hook
   lib/
     utils.ts                    # cn() class-name helper
+    auth/actions.ts             # signUp/signIn/signInWithGoogle/signOut actions
+    supabase/
+      client.ts                 # createBrowserClient (client components)
+      server.ts                 # createServerClient (RSC/actions/handlers)
+      middleware.ts             # updateSession() — cookie refresh + gate
   types/
     places.ts                   # AutocompleteResult, PlaceDetails, PlacesApiError
   styles/
@@ -189,3 +207,57 @@ HTTP `401` + `MISSING_API_KEY`; other upstream failures map to `502`.
 
 Keep FieldMasks minimal — Google bills Place Details by the field categories
 requested.
+
+## Authentication (Supabase Auth + SSR)
+
+Auth uses **Supabase Auth** with the `@supabase/ssr` cookie-based session
+helpers, so the session works across Server Components, Route Handlers,
+Server Actions, and middleware.
+
+### Environment
+
+```bash
+# .env.local (gitignored)
+NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
+```
+
+The anon key is safe to expose to the browser (RLS enforces access). Run
+`supabase/migrations/0001_user_profiles.sql` in the Supabase SQL editor to
+create the `user_profiles` table + RLS policies. For Google OAuth, enable the
+Google provider in Supabase and add `<origin>/auth/callback` as a redirect URL.
+
+### Three Supabase clients
+
+| File | Used in | Helper |
+|------|---------|--------|
+| `lib/supabase/client.ts` | Client Components | `createBrowserClient` |
+| `lib/supabase/server.ts` | RSC / actions / handlers | `createServerClient` + `cookies()` |
+| `lib/supabase/middleware.ts` | `middleware.ts` | `createServerClient` + request/response cookies |
+
+### Flows
+
+- **/signup** → `signUpWithEmail`. If email confirmation is off, a session is
+  returned and the user is redirected to **/onboarding**; otherwise a
+  "check your email" message is shown (the confirm link returns to
+  `/auth/callback?next=/onboarding`).
+- **/login** → `signInWithEmail`, then redirect to `returnTo` (if same-site)
+  or **/dashboard**.
+- **Google OAuth** (`signInWithGoogle`) → `signInWithOAuth` → provider →
+  `/auth/callback?next=…` → `exchangeCodeForSession` → redirect. New users
+  (signup) land on `/onboarding`, returning users on `/dashboard`/`returnTo`.
+- **/onboarding** → 3-step client wizard (destination + dates → companions →
+  budget slider). `saveOnboarding` upserts into `user_profiles`, then
+  redirects to **/dashboard**.
+
+### Route protection
+
+`middleware.ts` runs on all non-asset paths: it refreshes the session cookie
+site-wide (via `getUser()`) and redirects unauthenticated requests to any
+`/dashboard`, `/trip`, or `/account` route to
+`/login?returnTo=<original-path>`. `/onboarding` and `/dashboard` also guard
+themselves server-side as defence-in-depth.
+
+**Open-redirect safety**: `returnTo` / `next` are only honoured when they are
+same-site relative paths (start with `/`, not `//`) — enforced in the login
+page, `signInWithEmail`, `signInWithGoogle`, and the callback handler.

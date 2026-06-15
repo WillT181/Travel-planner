@@ -3,6 +3,8 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import TripPlanner from "@/components/trip/TripPlanner";
+import TripTabs from "@/components/trip/TripTabs";
+import { getUserPlan } from "@/lib/auth/plan";
 import type { Trip } from "@/types/trip";
 
 interface PageProps {
@@ -35,10 +37,11 @@ export default async function TripPage({ params }: PageProps) {
     redirect(`/login?returnTo=/trip/${params.id}`);
   }
 
-  const { data: raw } = await supabase
-    .from("trips")
-    .select(
-      `
+  const [{ data: raw }, plan] = await Promise.all([
+    supabase
+      .from("trips")
+      .select(
+        `
       id, user_id, destination_slug, destination_name, country,
       title, start_date, end_date, traveller_count, status, created_at,
       trip_days (
@@ -49,10 +52,12 @@ export default async function TripPage({ params }: PageProps) {
         )
       )
     `
-    )
-    .eq("id", params.id)
-    .eq("user_id", user.id)
-    .single();
+      )
+      .eq("id", params.id)
+      .eq("user_id", user.id)
+      .single(),
+    getUserPlan(supabase),
+  ]);
 
   if (!raw) notFound();
 
@@ -80,7 +85,11 @@ export default async function TripPage({ params }: PageProps) {
         ← Back to explore
       </Link>
 
-      <TripPlanner trip={trip} />
+      <TripTabs tripId={params.id} isPro={plan === "pro"} />
+
+      <div className="mt-6">
+        <TripPlanner trip={trip} />
+      </div>
     </div>
   );
 }

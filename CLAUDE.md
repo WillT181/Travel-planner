@@ -25,11 +25,15 @@ src/
   app/                          # Next.js App Router pages
     layout.tsx                  # Root layout (Navbar + Footer + Inter font)
     page.tsx                    # / — Home / landing page
-    search/page.tsx             # /search — Destination search
+    search/page.tsx             # /search — Destination search (client)
     itinerary/page.tsx          # /itinerary — Itinerary builder
     itinerary/[id]/page.tsx     # /itinerary/:id — Trip detail view
     map/page.tsx                # /map — Map view
     trips/page.tsx              # /trips — Saved trips list
+    api/
+      places/
+        autocomplete/route.ts        # POST — Places autocomplete proxy
+        details/[placeId]/route.ts   # GET  — Place details proxy
   components/
     nav/
       Navbar.tsx                # Sticky top nav with mobile hamburger drawer
@@ -38,8 +42,16 @@ src/
     ui/
       Button.tsx                # Button component + buttonVariants helper
       Card.tsx                  # Card component (default / elevated / flat)
+    search/
+      SearchBar.tsx             # Combobox input (icon, spinner, Esc-to-clear)
+      SearchResults.tsx         # Autocomplete dropdown (keyboard nav)
+      DestinationCard.tsx       # Selected-place detail card + skeleton
+  hooks/
+    usePlacesSearch.ts          # Debounced (350ms) autocomplete fetch hook
   lib/
     utils.ts                    # cn() class-name helper
+  types/
+    places.ts                   # AutocompleteResult, PlaceDetails, PlacesApiError
   styles/
     globals.css                 # Tailwind base, CSS variable colour tokens
 ```
@@ -126,3 +138,54 @@ Padding: `none` | `sm` | `md` | `lg`
 - **No default exports from config files** — named exports for utilities/types; default exports for React components and Next.js pages/layouts only.
 - **Tailwind only** — no inline styles or CSS Modules unless a strong reason exists.
 - **buttonVariants** — use this helper (not raw class strings) whenever you need button styles on a non-button element (Link, anchor).
+
+## Google Places API Integration
+
+The destination search feature proxies the **Google Places API (New)**
+through server-side route handlers so the key is never bundled into client
+JS and FieldMasks stay controlled in one place.
+
+### Environment
+
+```bash
+# .env.local (gitignored — never commit a real key)
+NEXT_PUBLIC_GOOGLE_PLACES_API_KEY=...
+```
+
+> Note: the key name carries the `NEXT_PUBLIC_` prefix as mandated by the
+> task spec, but it is **only read inside the `/api/places/*` route handlers**
+> (`process.env` on the server). Client code never references it. If you later
+> drop the photo-proxy approach, rename it without the prefix to keep it fully
+> private. The Place Photo URL is the one place the key is embedded in a
+> client-fetched URL (Google's media endpoint requires `key=` as a query param).
+
+### Routes
+
+| Route | Method | Body / Param | Returns |
+|-------|--------|--------------|---------|
+| `/api/places/autocomplete` | POST | `{ input: string }` | `AutocompleteResult[]` |
+| `/api/places/details/[placeId]` | GET | `placeId` path param | `PlaceDetails` |
+
+Both return a `PlacesApiError` (`{ error, code }`) on failure. Error `code`s:
+`MISSING_API_KEY`, `INVALID_REQUEST`, `UPSTREAM_ERROR`, `NOT_FOUND`,
+`NETWORK_ERROR`, `UNKNOWN`. Upstream `403` (bad/unauthorised key) is mapped to
+HTTP `401` + `MISSING_API_KEY`; other upstream failures map to `502`.
+
+### Client data flow
+
+1. `usePlacesSearch(query)` debounces input 350 ms, aborts stale requests, and
+   returns `{ results, isLoading, error, clearResults }`. Empty input makes no
+   call.
+2. `search/page.tsx` owns selection state, keyboard navigation (↑/↓/Enter),
+   and outside-click close; on select it fetches details and renders
+   `DestinationCard` (skeleton → detail → error-with-retry).
+3. "Start Planning" links to `/itinerary/new?destination={placeId}` (the
+   itinerary builder is a later step — that route is not built yet).
+
+### FieldMasks
+
+- Autocomplete: `suggestions.placePrediction.{placeId,text,structuredFormat}`
+- Details: `id,displayName,formattedAddress,location,photos,rating,userRatingCount,editorialSummary,types`
+
+Keep FieldMasks minimal — Google bills Place Details by the field categories
+requested.

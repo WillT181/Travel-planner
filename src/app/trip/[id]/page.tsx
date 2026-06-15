@@ -6,6 +6,7 @@ import TripPlanner from "@/components/trip/TripPlanner";
 import TripTabs from "@/components/trip/TripTabs";
 import { getUserPlan } from "@/lib/auth/plan";
 import type { Trip } from "@/types/trip";
+import type { TripInvite, TripMember, TripRole } from "@/types/collaboration";
 
 interface PageProps {
   params: { id: string };
@@ -37,11 +38,11 @@ export default async function TripPage({ params }: PageProps) {
     redirect(`/login?returnTo=/trip/${params.id}`);
   }
 
-  const [{ data: raw }, plan] = await Promise.all([
-    supabase
-      .from("trips")
-      .select(
-        `
+  // RLS (is_trip_member) authorizes the select — owner or any member.
+  const { data: raw } = await supabase
+    .from("trips")
+    .select(
+      `
       id, user_id, destination_slug, destination_name, country,
       title, start_date, end_date, traveller_count, status, created_at,
       trip_days (
@@ -52,14 +53,42 @@ export default async function TripPage({ params }: PageProps) {
         )
       )
     `
-      )
-      .eq("id", params.id)
-      .eq("user_id", user.id)
-      .single(),
-    getUserPlan(supabase),
-  ]);
+    )
+    .eq("id", params.id)
+    .single();
 
   if (!raw) notFound();
+
+  const [{ data: roleData }, { data: memberRows }] = await Promise.all([
+    supabase.rpc("trip_role", { _trip_id: params.id }),
+    supabase
+      .from("trip_members")
+      .select("user_id, email, role, edit_requested")
+      .eq("trip_id", params.id),
+  ]);
+
+  const role: TripRole =
+    (roleData as TripRole | null) ??
+    (raw.user_id === user.id ? "owner" : "viewer");
+  const canEdit = role === "owner" || role === "editor";
+  const members = (memberRows ?? []) as TripMember[];
+
+  // The owner's plan governs Pro features (collaboration, budget) for the trip.
+  const isOwnerPro =
+    role === "owner"
+      ? (await getUserPlan(supabase)) === "pro"
+      : members.some((m) => m.role === "owner"); // members can collaborate on a Pro owner's trip
+
+  // Only the owner can see/manage pending invites.
+  let invites: TripInvite[] = [];
+  if (role === "owner") {
+    const { data: inviteRows } = await supabase
+      .from("trip_invites")
+      .select("id, invited_email, role, status, token")
+      .eq("trip_id", params.id)
+      .eq("status", "pending");
+    invites = (inviteRows ?? []) as TripInvite[];
+  }
 
   const trip: Trip = {
     ...raw,
@@ -85,10 +114,18 @@ export default async function TripPage({ params }: PageProps) {
         ← Back to explore
       </Link>
 
-      <TripTabs tripId={params.id} isPro={plan === "pro"} />
+      <TripTabs tripId={params.id} isPro={isOwnerPro} />
 
       <div className="mt-6">
-        <TripPlanner trip={trip} />
+        <TripPlanner
+          trip={trip}
+          role={role}
+          canEdit={canEdit}
+          members={members}
+          invites={invites}
+          currentUserId={user.id}
+          isOwnerPro={isOwnerPro}
+        />
       </div>
     </div>
   );

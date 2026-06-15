@@ -13,6 +13,29 @@ export interface ActionResult {
   error?: string;
 }
 
+/**
+ * Confirms the signed-in user may edit this trip (owner or editor). Editing
+ * permission is enforced in the database via RLS + can_edit_trip(); this gives
+ * a friendly early error before we attempt the write.
+ */
+async function ensureCanEdit(
+  supabase: ReturnType<typeof createClient>,
+  tripId: string
+): Promise<string | null> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return "Not authenticated.";
+
+  const { data, error } = await supabase.rpc("can_edit_trip", {
+    _trip_id: tripId,
+  });
+  if (error || data !== true) {
+    return "You don't have edit access to this trip.";
+  }
+  return null;
+}
+
 // ── createTrip ───────────────────────────────────────────────────────────────
 
 export async function createTrip(
@@ -63,18 +86,8 @@ export async function addDay(
   tripId: string
 ): Promise<ActionResult & { dayId?: string }> {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Not authenticated." };
-
-  const { data: trip } = await supabase
-    .from("trips")
-    .select("id")
-    .eq("id", tripId)
-    .eq("user_id", user.id)
-    .single();
-  if (!trip) return { error: "Trip not found." };
+  const denied = await ensureCanEdit(supabase, tripId);
+  if (denied) return { error: denied };
 
   const { count } = await supabase
     .from("trip_days")
@@ -106,10 +119,8 @@ export async function deleteDay(
   tripId: string
 ): Promise<ActionResult> {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Not authenticated." };
+  const denied = await ensureCanEdit(supabase, tripId);
+  if (denied) return { error: denied };
 
   const { error } = await supabase
     .from("trip_days")
@@ -131,10 +142,8 @@ export async function updateDayLabel(
   label: string
 ): Promise<ActionResult> {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Not authenticated." };
+  const denied = await ensureCanEdit(supabase, tripId);
+  if (denied) return { error: denied };
 
   const { error } = await supabase
     .from("trip_days")
@@ -163,10 +172,8 @@ export async function addActivity(
   input: ActivityInput
 ): Promise<ActionResult & { activityId?: string }> {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Not authenticated." };
+  const denied = await ensureCanEdit(supabase, tripId);
+  if (denied) return { error: denied };
 
   const { data, error } = await supabase
     .from("activities")
@@ -194,10 +201,8 @@ export async function updateActivity(
   input: Partial<ActivityInput>
 ): Promise<ActionResult> {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Not authenticated." };
+  const denied = await ensureCanEdit(supabase, tripId);
+  if (denied) return { error: denied };
 
   const patch: Record<string, unknown> = {};
   if (input.title !== undefined) patch.title = input.title.trim();
@@ -224,10 +229,8 @@ export async function deleteActivity(
   tripId: string
 ): Promise<ActionResult> {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Not authenticated." };
+  const denied = await ensureCanEdit(supabase, tripId);
+  if (denied) return { error: denied };
 
   const { error } = await supabase
     .from("activities")

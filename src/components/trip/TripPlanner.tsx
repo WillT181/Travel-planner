@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Trip, TimeOfDay } from "@/types/trip";
+import type { TripInvite, TripMember, TripRole } from "@/types/collaboration";
 import {
   addDay,
   deleteDay,
@@ -10,7 +11,11 @@ import {
   deleteActivity,
   updateActivity,
 } from "@/lib/trips/actions";
+import { requestEditAccess } from "@/lib/trips/collaboration";
+import { useTripRealtime } from "@/hooks/useTripRealtime";
 import ActivityCard from "@/components/trip/ActivityCard";
+import MemberAvatars from "@/components/trip/MemberAvatars";
+import TripSettings from "@/components/trip/TripSettings";
 
 const FREE_MAX_DAYS = 5;
 
@@ -25,7 +30,25 @@ interface AddFormState {
   timeOfDay: TimeOfDay;
 }
 
-export default function TripPlanner({ trip }: { trip: Trip }) {
+interface TripPlannerProps {
+  trip: Trip;
+  role: TripRole;
+  canEdit: boolean;
+  members: TripMember[];
+  invites: TripInvite[];
+  currentUserId: string;
+  isOwnerPro: boolean;
+}
+
+export default function TripPlanner({
+  trip,
+  role,
+  canEdit,
+  members,
+  invites,
+  currentUserId,
+  isOwnerPro,
+}: TripPlannerProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [selectedDayId, setSelectedDayId] = useState<string | null>(
@@ -38,6 +61,10 @@ export default function TripPlanner({ trip }: { trip: Trip }) {
   const [addTitle, setAddTitle] = useState("");
   const [addNotes, setAddNotes] = useState("");
   const [dayLimitHit, setDayLimitHit] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [editRequested, setEditRequested] = useState(
+    members.find((m) => m.user_id === currentUserId)?.edit_requested ?? false
+  );
 
   const selectedDay =
     trip.trip_days.find((d) => d.id === selectedDayId) ??
@@ -47,6 +74,17 @@ export default function TripPlanner({ trip }: { trip: Trip }) {
 
   function refresh() {
     router.refresh();
+  }
+
+  // Live collaboration: refresh when a co-traveller changes the plan.
+  useTripRealtime(trip.id, refresh);
+
+  function handleRequestEdit() {
+    setEditRequested(true);
+    startTransition(async () => {
+      await requestEditAccess(trip.id);
+      refresh();
+    });
   }
 
   function handleAddDay() {
@@ -123,22 +161,83 @@ export default function TripPlanner({ trip }: { trip: Trip }) {
   return (
     <div className="mt-6">
       {/* Trip header */}
-      <div className="mb-6">
-        {trip.country && (
-          <p className="text-sm font-medium text-primary-700">{trip.country}</p>
-        )}
-        <h1 className="mt-0.5 text-3xl font-bold tracking-tight text-neutral-900 sm:text-4xl">
-          {trip.title ??
-            `Trip to ${trip.destination_name ?? "your destination"}`}
-        </h1>
-        {(trip.start_date || trip.end_date) && (
-          <p className="mt-1 text-sm text-neutral-500">
-            {trip.start_date}
-            {trip.start_date && trip.end_date ? " → " : ""}
-            {trip.end_date}
-          </p>
-        )}
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          {trip.country && (
+            <p className="text-sm font-medium text-primary-700">
+              {trip.country}
+            </p>
+          )}
+          <h1 className="mt-0.5 text-3xl font-bold tracking-tight text-neutral-900 sm:text-4xl">
+            {trip.title ??
+              `Trip to ${trip.destination_name ?? "your destination"}`}
+          </h1>
+          {(trip.start_date || trip.end_date) && (
+            <p className="mt-1 text-sm text-neutral-500">
+              {trip.start_date}
+              {trip.start_date && trip.end_date ? " → " : ""}
+              {trip.end_date}
+            </p>
+          )}
+        </div>
+
+        <div className="flex items-center gap-4">
+          <MemberAvatars members={members} currentUserId={currentUserId} />
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-50"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-4 w-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+            {role === "owner" ? "Share & settings" : "Members"}
+          </button>
+        </div>
       </div>
+
+      {/* Viewer read-only banner */}
+      {!canEdit && (
+        <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 text-sm text-neutral-600">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5 text-neutral-400"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            You have <strong className="mx-1">view-only</strong> access to this
+            trip.
+          </div>
+          <button
+            type="button"
+            onClick={handleRequestEdit}
+            disabled={editRequested || isPending}
+            className="shrink-0 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-700 disabled:opacity-60"
+          >
+            {editRequested ? "Edit access requested" : "Request edit access"}
+          </button>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
         {/* ── Sidebar ─────────────────────────────────────────────────────── */}
@@ -173,12 +272,60 @@ export default function TripPlanner({ trip }: { trip: Trip }) {
                       </span>
                     )}
                   </button>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteDay(day.id)}
+                      disabled={isPending}
+                      aria-label={`Delete Day ${day.day_number}`}
+                      className="hidden h-7 w-7 items-center justify-center rounded-md text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-600 group-hover:flex disabled:opacity-50"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M18 6 6 18M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              ))}
+              {trip.trip_days.length === 0 && (
+                <p className="px-3 py-2 text-sm text-neutral-400">
+                  No days yet.
+                </p>
+              )}
+            </nav>
+
+            {/* Add day or upgrade prompt */}
+            {canEdit && (
+              <div className="mt-3">
+                {atDayLimit || dayLimitHit ? (
+                  <div className="rounded-xl border border-accent-200 bg-accent-50 p-3 text-xs text-accent-800">
+                    <p className="font-semibold">5-day limit reached</p>
+                    <p className="mt-1 text-accent-700">
+                      Upgrade to Pro for unlimited days.
+                    </p>
+                    <a
+                      href="/pricing"
+                      className="mt-2 inline-block font-semibold text-accent-900 underline underline-offset-2"
+                    >
+                      Upgrade →
+                    </a>
+                  </div>
+                ) : (
                   <button
                     type="button"
-                    onClick={() => handleDeleteDay(day.id)}
+                    onClick={handleAddDay}
                     disabled={isPending}
-                    aria-label={`Delete Day ${day.day_number}`}
-                    className="hidden h-7 w-7 items-center justify-center rounded-md text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-600 group-hover:flex disabled:opacity-50"
+                    className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-600 transition-colors hover:border-primary-400 hover:text-primary-700 disabled:opacity-50"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -191,57 +338,13 @@ export default function TripPlanner({ trip }: { trip: Trip }) {
                       strokeLinejoin="round"
                       aria-hidden="true"
                     >
-                      <path d="M18 6 6 18M6 6l12 12" />
+                      <path d="M12 5v14M5 12h14" />
                     </svg>
+                    Add day
                   </button>
-                </div>
-              ))}
-              {trip.trip_days.length === 0 && (
-                <p className="px-3 py-2 text-sm text-neutral-400">
-                  No days yet.
-                </p>
-              )}
-            </nav>
-
-            {/* Add day or upgrade prompt */}
-            <div className="mt-3">
-              {atDayLimit || dayLimitHit ? (
-                <div className="rounded-xl border border-accent-200 bg-accent-50 p-3 text-xs text-accent-800">
-                  <p className="font-semibold">5-day limit reached</p>
-                  <p className="mt-1 text-accent-700">
-                    Upgrade to Pro for unlimited days.
-                  </p>
-                  <a
-                    href="/pricing"
-                    className="mt-2 inline-block font-semibold text-accent-900 underline underline-offset-2"
-                  >
-                    Upgrade →
-                  </a>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleAddDay}
-                  disabled={isPending}
-                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-600 transition-colors hover:border-primary-400 hover:text-primary-700 disabled:opacity-50"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-4 w-4"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M12 5v14M5 12h14" />
-                  </svg>
-                  Add day
-                </button>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Trip meta */}
@@ -338,11 +441,25 @@ export default function TripPlanner({ trip }: { trip: Trip }) {
                               handleUpdateActivity(activity.id, data)
                             }
                             isPending={isPending}
+                            readOnly={!canEdit}
                           />
                         ))}
 
-                        {/* Inline add form */}
-                        {isAddingHere ? (
+                        {canEdit &&
+                          activities.length === 0 &&
+                          !isAddingHere && (
+                            <p className="px-1 text-sm text-neutral-400">
+                              Nothing planned yet.
+                            </p>
+                          )}
+                        {!canEdit && activities.length === 0 && (
+                          <p className="px-1 text-sm text-neutral-400">
+                            Nothing planned for the {slot.label.toLowerCase()}.
+                          </p>
+                        )}
+
+                        {/* Inline add form (editors only) */}
+                        {canEdit && isAddingHere ? (
                           <form
                             onSubmit={handleAddActivity}
                             className="space-y-3 rounded-xl border border-primary-200 bg-primary-50 p-4"
@@ -380,7 +497,7 @@ export default function TripPlanner({ trip }: { trip: Trip }) {
                               </button>
                             </div>
                           </form>
-                        ) : (
+                        ) : canEdit ? (
                           <button
                             type="button"
                             onClick={() =>
@@ -403,7 +520,7 @@ export default function TripPlanner({ trip }: { trip: Trip }) {
                             </svg>
                             Add {slot.label.toLowerCase()} activity
                           </button>
-                        )}
+                        ) : null}
                       </div>
                     </section>
                   );
@@ -417,24 +534,38 @@ export default function TripPlanner({ trip }: { trip: Trip }) {
                 🗺️
               </div>
               <h2 className="text-xl font-bold text-neutral-900">
-                Start building your itinerary
+                {canEdit ? "Start building your itinerary" : "No itinerary yet"}
               </h2>
               <p className="mt-2 max-w-sm text-neutral-600">
-                Add your first day to begin planning. You can add up to{" "}
-                {FREE_MAX_DAYS} days on the free plan.
+                {canEdit
+                  ? `Add your first day to begin planning. You can add up to ${FREE_MAX_DAYS} days on the free plan.`
+                  : "The trip owner hasn't added any days yet. Check back soon."}
               </p>
-              <button
-                type="button"
-                onClick={handleAddDay}
-                disabled={isPending}
-                className="mt-6 rounded-xl bg-primary-600 px-6 py-3 font-semibold text-white transition-colors hover:bg-primary-700 disabled:opacity-50"
-              >
-                + Add first day
-              </button>
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={handleAddDay}
+                  disabled={isPending}
+                  className="mt-6 rounded-xl bg-primary-600 px-6 py-3 font-semibold text-white transition-colors hover:bg-primary-700 disabled:opacity-50"
+                >
+                  + Add first day
+                </button>
+              )}
             </div>
           )}
         </main>
       </div>
+
+      <TripSettings
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        tripId={trip.id}
+        role={role}
+        isOwnerPro={isOwnerPro}
+        members={members}
+        invites={invites}
+        currentUserId={currentUserId}
+      />
     </div>
   );
 }

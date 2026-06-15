@@ -290,3 +290,61 @@ page, `signInWithEmail`, `signInWithGoogle`, and the callback handler.
   redirected to sign-up (returning to the destination); logged-in users get a
   row inserted into the `trips` table (migration `0002_trips.sql`, per-user
   RLS) and are redirected to `/trip/[id]` (a protected stub page).
+
+## Trip Collaboration (Pro)
+
+Trips can be shared with collaborators as **Viewer** or **Editor**. Schema +
+RLS live in `supabase/migrations/0005_collaboration.sql`.
+
+### Data model
+
+- `trip_members` — every participant (owner included, added by an
+  `after insert` trigger on `trips`). Columns: `trip_id`, `user_id`, `email`,
+  `role` (`owner`/`editor`/`viewer`), `edit_requested`.
+- `trip_invites` — `invited_email`, `role`, `status`
+  (`pending`/`accepted`/`declined`), `token` (UUID for `/invite/[token]`),
+  `invited_by`.
+- `trips.user_id` stays the canonical owner. Ownership transfer swaps it.
+
+### Roles & RLS
+
+`SECURITY DEFINER` helpers avoid policy recursion: `is_trip_member`,
+`trip_role`, `can_edit_trip`, `trip_id_for_day`. RLS: members can **view**
+trips/days/activities; only editors+owner can **mutate** days/activities;
+only the owner can update/delete the trip row. Invitee actions (`accept`,
+`decline`, ownership `transfer`, anonymous `invite_details` preview) run
+through `SECURITY DEFINER` RPCs.
+
+### Server actions (`src/lib/trips/collaboration.ts`)
+
+`inviteCollaborator`, `revokeInvite`, `acceptInvite`, `declineInvite`,
+`changeMemberRole`, `removeMember`, `transferOwnership`, `requestEditAccess`.
+Inviting is gated on the **owner** being Pro. Planner mutations in
+`actions.ts` now authorize via `can_edit_trip` (editors, not just owner).
+
+### Email (Resend)
+
+`src/lib/email/resend.ts` POSTs to the Resend REST API — no SDK dependency.
+Env (server-only, never `NEXT_PUBLIC_`):
+
+```bash
+RESEND_API_KEY=...                       # if unset, invites still create;
+RESEND_FROM="Wanderly <onboarding@resend.dev>"  # the UI surfaces the link to copy
+```
+
+### Realtime
+
+`useTripRealtime(tripId, onChange)` subscribes to `postgres_changes` on
+`trip_days` (filtered by `trip_id`) and `activities` (RLS-scoped), debouncing a
+`router.refresh()` so collaborators' edits appear live. The two tables are
+added to the `supabase_realtime` publication in the migration.
+
+### UI
+
+- `/trip/[id]` top bar: `MemberAvatars` (initials) + a Share/Members button
+  opening the `TripSettings` slide-over (invite form, member roles, pending
+  invites, ownership transfer).
+- Viewers get a read-only planner + a "Request edit access" button (sets
+  `edit_requested`, surfaced to the owner in settings).
+- `/invite/[token]`: public acceptance page — previews the invite, prompts
+  sign-up/login when logged out, accept/decline when the email matches.

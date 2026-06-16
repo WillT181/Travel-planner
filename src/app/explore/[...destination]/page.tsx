@@ -10,12 +10,21 @@ import {
   resolveCatalogDestination,
   type CatalogDestination,
 } from "@/lib/destinations/catalog";
+import { resolveLocalCity } from "@/lib/destinations/local";
 import ItineraryTimeline from "@/components/explore/ItineraryTimeline";
 import LockedItineraryCard from "@/components/explore/LockedItineraryCard";
 import StartPlanningButton from "@/components/explore/StartPlanningButton";
 
 interface PageProps {
   params: { destination: string[] };
+}
+
+/**
+ * Resolve a generated slug to a destination: curated major countries/cities
+ * first, then the full city dataset (cities.full.json) for the long tail.
+ */
+function resolvePlace(slug: string): CatalogDestination | null {
+  return resolveCatalogDestination(slug) ?? resolveLocalCity(slug);
 }
 
 /** Pre-render the curated seed guides; everything else renders on demand. */
@@ -40,7 +49,7 @@ export function generateMetadata({ params }: PageProps): Metadata {
     };
   }
 
-  const place = resolveCatalogDestination(slug);
+  const place = resolvePlace(slug);
   if (place) {
     const where =
       place.kind === "city" ? `${place.name}, ${place.country}` : place.name;
@@ -77,7 +86,7 @@ export default function DestinationPage({ params }: PageProps) {
   const seed = getDestination(slug);
   if (seed) return <SeedDestination slug={slug} />;
 
-  const place = resolveCatalogDestination(slug);
+  const place = resolvePlace(slug);
   if (place) return <GeneratedDestination place={place} slug={slug} />;
 
   notFound();

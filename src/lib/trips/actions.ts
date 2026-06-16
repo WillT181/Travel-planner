@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getUserPlan } from "@/lib/auth/plan";
 import { getDestination } from "@/data/destinations";
 import { resolveCatalogDestination } from "@/lib/destinations/catalog";
+import { resolveLocalCity } from "@/lib/destinations/local";
 import type { TimeOfDay } from "@/types/trip";
 
 const FREE_MAX_TRIPS = 3;
@@ -49,7 +50,9 @@ export async function createTrip(
   const destination = seed
     ? { slug: seed.slug, name: seed.name, country: seed.country }
     : (() => {
-        const place = resolveCatalogDestination(destinationSlug);
+        const place =
+          resolveCatalogDestination(destinationSlug) ??
+          resolveLocalCity(destinationSlug);
         return place
           ? { slug: place.slug, name: place.name, country: place.country }
           : null;

@@ -15,7 +15,12 @@
 
 import countriesData from "@/data/destinations/countries.json";
 import citiesData from "@/data/destinations/cities.full.json";
-import type { AutocompleteResult, PlaceDetails } from "@/types/places";
+import type {
+  AutocompleteResult,
+  CitySearchResult,
+  PlaceDetails,
+} from "@/types/places";
+import type { CatalogDestination } from "@/lib/destinations/catalog";
 
 export interface CountryRow {
   id: string;
@@ -57,6 +62,7 @@ function slugify(value: string): string {
 }
 
 const countryById = new Map(countries.map((c) => [c.id, c]));
+const countryBySlug = new Map(countries.map((c) => [c.slug, c]));
 
 /** Precomputed, searchable city index (built once at cold start). */
 interface CityIndexEntry {
@@ -233,6 +239,98 @@ function countryDetails(country: CountryRow): PlaceDetails {
     reviewCount: null,
     summary: `${country.name} is a country in ${country.region}.${capital}${currency}`,
     types: ["country", country.region.toLowerCase().replace(/\s+/g, "_")],
+  };
+}
+
+// ── City search results (slug-shaped, for /api/cities/search) ────────────────
+
+/**
+ * Build a CitySearchResult for a raw (name, countryId) pair — joining the
+ * country name + flag from countries.json and producing the `/explore` slug.
+ * Returns null if the country id is unknown. Used by the cities search route to
+ * shape database rows, and by the in-memory fallback below.
+ */
+export function cityResult(
+  name: string,
+  countryId: string
+): CitySearchResult | null {
+  const country = countryById.get(countryId);
+  if (!country) return null;
+  return {
+    name,
+    slug: `${country.slug}/${slugify(name)}`,
+    country: country.name,
+    flag: country.flag,
+    isCapital:
+      country.capital != null && normalise(country.capital) === normalise(name),
+  };
+}
+
+/**
+ * In-memory city-only search over cities.full.json — the graceful fallback for
+ * /api/cities/search when the database is unavailable or unconfigured.
+ */
+export function searchLocalCities(
+  input: string,
+  limit = 10
+): CitySearchResult[] {
+  const query = normalise(input.trim());
+  if (!query) return [];
+
+  const scored: { entry: CityIndexEntry; score: number; rank: number }[] = [];
+  for (const entry of cityIndex) {
+    const score = matchScore(entry.norm, query);
+    if (score === Infinity) continue;
+    scored.push({ entry, score, rank: entry.isCapital ? 0 : 1 });
+  }
+
+  scored.sort(
+    (a, b) =>
+      a.score - b.score ||
+      a.rank - b.rank ||
+      a.entry.name.length - b.entry.name.length ||
+      a.entry.name.localeCompare(b.entry.name)
+  );
+
+  return scored
+    .slice(0, limit)
+    .map(({ entry }) => cityResult(entry.name, entry.countryId))
+    .filter((c): c is CitySearchResult => c !== null);
+}
+
+/**
+ * Resolve a full-dataset city slug ("<country-slug>/<city-slug>") to a
+ * CatalogDestination — for cities that exist in cities.full.json but not in the
+ * curated cities.major.json. Server-only (this module imports cities.full.json).
+ */
+export function resolveLocalCity(slug: string): CatalogDestination | null {
+  const clean = slug.toLowerCase().replace(/^\/+|\/+$/g, "");
+  const sep = clean.indexOf("/");
+  if (sep < 0) return null;
+
+  const country = countryBySlug.get(clean.slice(0, sep));
+  if (!country) return null;
+
+  const entry = cityByPlaceId.get(
+    `${CITY_PREFIX}${country.id}:${clean.slice(sep + 1)}`
+  );
+  if (!entry) return null;
+
+  return {
+    kind: "city",
+    slug: `${country.slug}/${slugify(entry.name)}`,
+    name: entry.name,
+    country: country.name,
+    countryId: country.id,
+    region: country.region,
+    subregion: country.subregion,
+    capital: country.capital,
+    currency: country.currency,
+    currencySymbol: country.currencySymbol,
+    flag: country.flag,
+    isCapital: entry.isCapital,
+    lat: country.lat,
+    lng: country.lng,
   };
 }
 

@@ -3,15 +3,17 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import countriesRaw from "@/data/destinations/countries.json";
-import citiesRaw from "@/data/destinations/cities.major.json";
+import type { CitySearchResult } from "@/types/places";
 
 /**
- * Global destination search. Searches all countries + major cities entirely
- * client-side (the data is bundled), with a debounced, ranked, keyboard-
- * navigable dropdown. On select it routes to /explore/{slug}.
+ * Global destination search. Countries are searched entirely client-side (the
+ * small countries.json is bundled); cities come from /api/cities/search, which
+ * is backed by the full ~156k-city dataset in the database. Results merge into
+ * one debounced, ranked, keyboard-navigable dropdown that routes to
+ * /explore/{slug} on select.
  *
- * NOTE: only countries.json + cities.major.json are imported here — never
- * cities.full.json, which is far too large for the client bundle.
+ * NOTE: no city JSON is imported here — cities.major.json / cities.full.json
+ * are far too large for the client bundle, so cities are fetched on demand.
  */
 
 interface RawCountry {
@@ -20,14 +22,6 @@ interface RawCountry {
   slug: string;
   region: string;
   flag: string | null;
-}
-
-interface RawCity {
-  name: string;
-  countryId: string;
-  country: string;
-  slug: string;
-  isCapital: boolean;
 }
 
 interface SearchItem {
@@ -63,6 +57,31 @@ function SearchIcon() {
   );
 }
 
+function Spinner() {
+  return (
+    <svg
+      className="h-4 w-4 animate-spin text-primary-600"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <circle
+        className="opacity-25"
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="4"
+      />
+      <path
+        className="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z"
+      />
+    </svg>
+  );
+}
+
 export default function DestinationSearch({
   placeholder = "Search any city or country…",
   autoFocus = false,
@@ -78,18 +97,16 @@ export default function DestinationSearch({
   const [debounced, setDebounced] = useState("");
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [cityItems, setCityItems] = useState<SearchItem[]>([]);
+  const [isFetching, setIsFetching] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const listboxId = useId();
   const optionPrefix = useId();
 
-  // Build the combined searchable index exactly once.
-  const items = useMemo<SearchItem[]>(() => {
-    const countries = countriesRaw as RawCountry[];
-    const cities = citiesRaw as RawCity[];
-    const flagByCountryId = new Map(countries.map((c) => [c.id, c.flag ?? ""]));
-
-    const countryItems: SearchItem[] = countries.map((c) => ({
+  // Build the (small) country index exactly once — cities are fetched on demand.
+  const countryItems = useMemo<SearchItem[]>(() => {
+    return (countriesRaw as RawCountry[]).map((c) => ({
       kind: "country",
       name: c.name,
       lower: c.name.toLowerCase(),
@@ -98,21 +115,9 @@ export default function DestinationSearch({
       secondary: `Country · ${c.region}`,
       isCapital: false,
     }));
-
-    const cityItems: SearchItem[] = cities.map((c) => ({
-      kind: "city",
-      name: c.name,
-      lower: c.name.toLowerCase(),
-      slug: c.slug,
-      flag: flagByCountryId.get(c.countryId) || "📍",
-      secondary: `City · ${c.country}`,
-      isCapital: c.isCapital,
-    }));
-
-    return [...countryItems, ...cityItems];
   }, []);
 
-  // Debounce the query that drives filtering.
+  // Debounce the query that drives filtering + the city fetch.
   useEffect(() => {
     const t = setTimeout(
       () => setDebounced(query.trim().toLowerCase()),
@@ -121,17 +126,58 @@ export default function DestinationSearch({
     return () => clearTimeout(t);
   }, [query]);
 
+  // Fetch matching cities from the server (full dataset) for the debounced query.
+  useEffect(() => {
+    if (!debounced) {
+      setCityItems([]);
+      setIsFetching(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setIsFetching(true);
+
+    fetch(`/api/cities/search?q=${encodeURIComponent(debounced)}`, {
+      signal: controller.signal,
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: CitySearchResult[]) => {
+        setCityItems(
+          (Array.isArray(data) ? data : []).map((c) => ({
+            kind: "city",
+            name: c.name,
+            lower: c.name.toLowerCase(),
+            slug: c.slug,
+            flag: c.flag ?? "📍",
+            secondary: `City · ${c.country}`,
+            isCapital: c.isCapital,
+          }))
+        );
+        setIsFetching(false);
+      })
+      .catch((err) => {
+        // Ignore aborts from superseded keystrokes; clear on real failures.
+        if (err?.name !== "AbortError") {
+          setCityItems([]);
+          setIsFetching(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [debounced]);
+
   // All matches (ranked), plus the capped slice shown in the dropdown.
   const { visible, total } = useMemo(() => {
     const q = debounced;
     if (!q) return { visible: [] as SearchItem[], total: 0 };
 
-    const matches = items.filter((it) => it.lower.includes(q));
+    const countryMatches = countryItems.filter((it) => it.lower.includes(q));
+    const matches = [...countryMatches, ...cityItems];
 
     matches.sort((a, b) => score(a, q) - score(b, q) || tieBreak(a, b));
 
     return { visible: matches.slice(0, MAX_RESULTS), total: matches.length };
-  }, [items, debounced]);
+  }, [countryItems, cityItems, debounced]);
 
   const showDropdown = open && query.trim().length > 0;
   const moreCount = total - visible.length;
@@ -255,7 +301,15 @@ export default function DestinationSearch({
                 );
               })}
 
-              {moreCount > 0 ? (
+              {isFetching ? (
+                <li
+                  role="presentation"
+                  className="flex items-center justify-center gap-2 border-t border-neutral-100 px-4 py-2 text-sm text-neutral-500"
+                >
+                  <Spinner />
+                  <span>Searching cities…</span>
+                </li>
+              ) : moreCount > 0 ? (
                 <li
                   role="presentation"
                   className="border-t border-neutral-100 px-4 py-2 text-center text-sm text-neutral-500"
@@ -264,6 +318,11 @@ export default function DestinationSearch({
                 </li>
               ) : null}
             </ul>
+          ) : isFetching ? (
+            <div className="flex items-center justify-center gap-2 px-4 py-6 text-sm text-neutral-500">
+              <Spinner />
+              <span>Searching…</span>
+            </div>
           ) : (
             <div className="px-4 py-6 text-center">
               <p className="text-sm font-medium text-neutral-700">

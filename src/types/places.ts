@@ -26,6 +26,20 @@ export interface PlaceDetails {
   types: string[];
 }
 
+/**
+ * A single city suggestion returned by /api/cities/search. Country metadata
+ * (name, flag) is joined in from the bundled countries.json so the row can be
+ * rendered without any further lookups.
+ */
+export interface CitySearchResult {
+  name: string;
+  /** "<country-slug>/<city-slug>" — the /explore/{slug} target. */
+  slug: string;
+  country: string;
+  flag: string | null;
+  isCapital: boolean;
+}
+
 /** Standard error envelope returned by every places API route on failure. */
 export interface PlacesApiError {
   error: string;

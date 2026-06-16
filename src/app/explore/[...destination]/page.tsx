@@ -11,6 +11,11 @@ import {
   type CatalogDestination,
 } from "@/lib/destinations/catalog";
 import { resolveLocalCity } from "@/lib/destinations/local";
+import { getCityInfo, type CityInfo } from "@/lib/destinations/cityInfo";
+import {
+  getWeatherByCoords,
+  type WeatherSummary,
+} from "@/lib/weather/openMeteo";
 import ItineraryTimeline from "@/components/explore/ItineraryTimeline";
 import LockedItineraryCard from "@/components/explore/LockedItineraryCard";
 import StartPlanningButton from "@/components/explore/StartPlanningButton";
@@ -80,7 +85,7 @@ function QuickFact({ label, value }: { label: string; value: string }) {
   );
 }
 
-export default function DestinationPage({ params }: PageProps) {
+export default async function DestinationPage({ params }: PageProps) {
   const slug = params.destination.join("/");
 
   const seed = getDestination(slug);
@@ -202,7 +207,7 @@ function SeedDestination({ slug }: { slug: string }) {
 
 // ── Generated destination — country / major city from the bundled catalog ────
 
-function GeneratedDestination({
+async function GeneratedDestination({
   place,
   slug,
 }: {
@@ -213,6 +218,21 @@ function GeneratedDestination({
   const currency = place.currency
     ? `${place.currency}${place.currencySymbol ? ` (${place.currencySymbol})` : ""}`
     : "—";
+
+  // For cities, enrich with live geocoding facts + current weather (both
+  // best-effort; the page renders fine if either is unavailable).
+  const info =
+    place.kind === "city"
+      ? await getCityInfo(place.name, place.countryId)
+      : null;
+  const weather = info
+    ? await getWeatherByCoords(
+        info.latitude,
+        info.longitude,
+        place.name,
+        place.country
+      )
+    : null;
 
   return (
     <div className="py-8">
@@ -281,6 +301,69 @@ function GeneratedDestination({
         </dl>
       </section>
 
+      {/* Live city info (weather + geocoded facts) */}
+      {place.kind === "city" && (info || weather) ? (
+        <section className="mt-10" aria-labelledby="about-heading">
+          <h2
+            id="about-heading"
+            className="text-2xl font-bold tracking-tight text-neutral-900"
+          >
+            About {place.name}
+          </h2>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_1.4fr]">
+            {weather ? <WeatherPanel weather={weather} /> : null}
+
+            {info ? (
+              <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {info.population != null ? (
+                  <QuickFact
+                    label="Population"
+                    value={formatNumber(info.population)}
+                  />
+                ) : null}
+                {info.region ? (
+                  <QuickFact label="Region" value={info.region} />
+                ) : null}
+                {info.timezone ? (
+                  <QuickFact
+                    label="Timezone"
+                    value={info.timezone.replace(/_/g, " ")}
+                  />
+                ) : null}
+                {info.timezone ? (
+                  <QuickFact
+                    label="Local time"
+                    value={localTime(info.timezone)}
+                  />
+                ) : null}
+                {info.elevation != null ? (
+                  <QuickFact
+                    label="Elevation"
+                    value={`${formatNumber(Math.round(info.elevation))} m`}
+                  />
+                ) : null}
+                <QuickFact
+                  label="Coordinates"
+                  value={`${info.latitude.toFixed(2)}, ${info.longitude.toFixed(2)}`}
+                />
+              </dl>
+            ) : null}
+          </div>
+
+          {info ? (
+            <a
+              href={`https://www.openstreetmap.org/?mlat=${info.latitude}&mlon=${info.longitude}#map=11/${info.latitude}/${info.longitude}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:text-primary-700"
+            >
+              View on map ↗
+            </a>
+          ) : null}
+        </section>
+      ) : null}
+
       {/* Start planning CTA */}
       <div className="mt-12 flex flex-col items-start gap-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-6 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -295,4 +378,45 @@ function GeneratedDestination({
       </div>
     </div>
   );
+}
+
+// ── Helpers for the live city-info section ───────────────────────────────────
+
+function WeatherPanel({ weather }: { weather: WeatherSummary }) {
+  return (
+    <div className="flex items-center gap-4 rounded-2xl border border-primary-100 bg-primary-50 p-5">
+      <span className="text-5xl leading-none" aria-hidden="true">
+        {weather.emoji}
+      </span>
+      <div>
+        <p className="text-xs font-medium uppercase tracking-wide text-primary-700">
+          Current weather
+        </p>
+        <p className="mt-0.5 text-2xl font-bold text-neutral-900">
+          {weather.temperature}°C
+        </p>
+        <p className="text-sm text-neutral-600">
+          {weather.description} · H {weather.high}° / L {weather.low}°
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** Thousands-separated integer, e.g. 1234567 → "1,234,567". */
+function formatNumber(value: number): string {
+  return value.toLocaleString("en-US");
+}
+
+/** Current wall-clock time in the given IANA timezone, e.g. "14:32". */
+function localTime(timezone: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: timezone,
+    }).format(new Date());
+  } catch {
+    return "—";
+  }
 }

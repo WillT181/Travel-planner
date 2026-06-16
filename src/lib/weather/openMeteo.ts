@@ -74,13 +74,31 @@ export async function getWeather(
   city: string,
   fallbackCountry = ""
 ): Promise<WeatherSummary | null> {
-  try {
-    const place = await geocode(city);
-    if (!place) return null;
+  const place = await geocode(city);
+  if (!place) return null;
+  return getWeatherByCoords(
+    place.latitude,
+    place.longitude,
+    place.name,
+    place.country || fallbackCountry
+  );
+}
 
+/**
+ * Fetch a weather summary directly from coordinates — use this when the caller
+ * already knows the lat/lon (e.g. from a prior geocode) to skip a second
+ * geocoding round-trip.
+ */
+export async function getWeatherByCoords(
+  latitude: number,
+  longitude: number,
+  city: string,
+  country = ""
+): Promise<WeatherSummary | null> {
+  try {
     const url =
-      `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}` +
-      `&longitude=${place.longitude}&current=temperature_2m,weather_code` +
+      `https://api.open-meteo.com/v1/forecast?latitude=${latitude}` +
+      `&longitude=${longitude}&current=temperature_2m,weather_code` +
       `&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1`;
     const res = await fetch(url, { next: { revalidate: 3_600 } });
     if (!res.ok) return null;
@@ -95,8 +113,8 @@ export async function getWeather(
     const { label, emoji } = describe(code);
 
     return {
-      city: place.name,
-      country: place.country || fallbackCountry,
+      city,
+      country,
       temperature: Math.round(json.current.temperature_2m),
       weatherCode: code,
       description: label,

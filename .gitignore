@@ -13,6 +13,10 @@ out/
 # Generated visual preview (regenerate with `npm run preview`)
 preview/
 
+# Curated city list — superseded by cities.full.json (server-side search).
+# Regenerate any time with the destinations generator.
+src/data/destinations/cities.major.json
+
 # OS
 .DS_Store
 

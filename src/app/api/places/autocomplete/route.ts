@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { AutocompleteResult, PlacesApiError } from "@/types/places";
+import { searchLocalDestinations } from "@/lib/destinations/local";
 
 const AUTOCOMPLETE_URL = "https://places.googleapis.com/v1/places:autocomplete";
 
@@ -25,22 +26,13 @@ function errorResponse(
   return NextResponse.json(body, { status });
 }
 
+function hasGoogleKey(apiKey: string | undefined): apiKey is string {
+  return Boolean(apiKey) && apiKey !== "YOUR_GOOGLE_PLACES_API_KEY_HERE";
+}
+
 export async function POST(
   request: Request
 ): Promise<NextResponse<AutocompleteResult[] | PlacesApiError>> {
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY;
-
-  if (!apiKey || apiKey === "YOUR_GOOGLE_PLACES_API_KEY_HERE") {
-    return errorResponse(
-      {
-        error:
-          "Google Places API key is not configured. Add NEXT_PUBLIC_GOOGLE_PLACES_API_KEY to .env.local.",
-        code: "MISSING_API_KEY",
-      },
-      500
-    );
-  }
-
   let input: unknown;
   try {
     const body = await request.json();
@@ -62,6 +54,15 @@ export async function POST(
     );
   }
 
+  const query = input.trim();
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY;
+
+  // No Google key configured → serve from the bundled local dataset so search
+  // still works out of the box.
+  if (!hasGoogleKey(apiKey)) {
+    return NextResponse.json(searchLocalDestinations(query));
+  }
+
   let upstream: Response;
   try {
     upstream = await fetch(AUTOCOMPLETE_URL, {
@@ -72,31 +73,18 @@ export async function POST(
         "X-Goog-FieldMask":
           "suggestions.placePrediction.placeId,suggestions.placePrediction.text,suggestions.placePrediction.structuredFormat",
       },
-      body: JSON.stringify({ input: input.trim() }),
+      body: JSON.stringify({ input: query }),
       cache: "no-store",
     });
   } catch {
-    return errorResponse(
-      {
-        error: "Could not reach the Places service. Check your connection.",
-        code: "NETWORK_ERROR",
-      },
-      503
-    );
+    // Network blip reaching Google — degrade to the local dataset.
+    return NextResponse.json(searchLocalDestinations(query));
   }
 
   if (!upstream.ok) {
-    const status = upstream.status === 403 ? 401 : 502;
-    return errorResponse(
-      {
-        error:
-          upstream.status === 403
-            ? "The Places API rejected the request — the API key may be invalid or unauthorised."
-            : "The Places service returned an unexpected error.",
-        code: upstream.status === 403 ? "MISSING_API_KEY" : "UPSTREAM_ERROR",
-      },
-      status
-    );
+    // Bad/unauthorised key or upstream error — degrade to the local dataset
+    // rather than failing the whole search.
+    return NextResponse.json(searchLocalDestinations(query));
   }
 
   const data: GoogleAutocompleteResponse = await upstream.json();

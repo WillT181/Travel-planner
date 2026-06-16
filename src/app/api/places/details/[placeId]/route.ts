@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { PlaceDetails, PlacesApiError } from "@/types/places";
+import { getLocalDetails, isLocalPlaceId } from "@/lib/destinations/local";
 
 const DETAILS_BASE = "https://places.googleapis.com/v1/places";
 
@@ -42,6 +43,25 @@ export async function GET(
   _request: Request,
   { params }: { params: { placeId: string } }
 ): Promise<NextResponse<PlaceDetails | PlacesApiError>> {
+  const placeId = params.placeId?.trim();
+  if (!placeId) {
+    return errorResponse(
+      { error: "A placeId is required.", code: "INVALID_REQUEST" },
+      400
+    );
+  }
+
+  // Local dataset placeIds (from the no-key autocomplete fallback) resolve
+  // entirely offline.
+  if (isLocalPlaceId(placeId)) {
+    const local = getLocalDetails(placeId);
+    if (local) return NextResponse.json(local);
+    return errorResponse(
+      { error: "That destination could not be found.", code: "NOT_FOUND" },
+      404
+    );
+  }
+
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY;
 
   if (!apiKey || apiKey === "YOUR_GOOGLE_PLACES_API_KEY_HERE") {
@@ -52,14 +72,6 @@ export async function GET(
         code: "MISSING_API_KEY",
       },
       500
-    );
-  }
-
-  const placeId = params.placeId?.trim();
-  if (!placeId) {
-    return errorResponse(
-      { error: "A placeId is required.", code: "INVALID_REQUEST" },
-      400
     );
   }
 

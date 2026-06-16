@@ -13,25 +13,6 @@ type Filter = Mood | "All";
 
 const FILTERS: Filter[] = ["All", ...MOODS];
 
-function SearchIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      className="h-5 w-5 text-neutral-400"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <circle cx="11" cy="11" r="8" />
-      <path d="m21 21-4.3-4.3" />
-    </svg>
-  );
-}
-
 function ClockIcon() {
   return (
     <svg
@@ -105,43 +86,19 @@ export default function ExploreBrowser({
 }: {
   destinations: Destination[];
 }) {
-  const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<Filter>("All");
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return destinations.filter((d) => {
-      const matchesMood =
-        activeFilter === "All" || d.moods.includes(activeFilter);
-      const matchesQuery =
-        q.length === 0 ||
-        d.name.toLowerCase().includes(q) ||
-        d.country.toLowerCase().includes(q);
-      return matchesMood && matchesQuery;
-    });
-  }, [destinations, query, activeFilter]);
+    return destinations.filter(
+      (d) => activeFilter === "All" || d.moods.includes(activeFilter)
+    );
+  }, [destinations, activeFilter]);
 
   return (
     <div>
-      {/* Search */}
-      <div className="relative">
-        <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
-          <SearchIcon />
-        </span>
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          aria-label="Filter destinations by name or country"
-          placeholder="Search destinations or countries…"
-          autoComplete="off"
-          className="h-12 w-full rounded-xl border border-neutral-200 bg-white pl-12 pr-4 text-base text-neutral-900 shadow-sm placeholder:text-neutral-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
-        />
-      </div>
-
       {/* Mood filter pills */}
       <div
-        className="mt-4 flex flex-wrap gap-2"
+        className="flex flex-wrap gap-2"
         role="group"
         aria-label="Filter by mood"
       >

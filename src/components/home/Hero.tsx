@@ -1,4 +1,4 @@
-import HeroSearch from "@/components/home/HeroSearch";
+import DestinationSearch from "@/components/DestinationSearch";
 
 const TRUST_BADGES = [
   "100k+ trips planned",
@@ -82,7 +82,7 @@ export default function Hero() {
         </p>
 
         <div className="mt-8 w-full max-w-xl">
-          <HeroSearch />
+          <DestinationSearch placeholder="Where to? Try “Lisbon” or “Japan”" />
         </div>
 
         <ul

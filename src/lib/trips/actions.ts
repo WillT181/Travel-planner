@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUserPlan } from "@/lib/auth/plan";
 import { getDestination } from "@/data/destinations";
+import { resolveCatalogDestination } from "@/lib/destinations/catalog";
 import type { TimeOfDay } from "@/types/trip";
 
 const FREE_MAX_TRIPS = 3;
@@ -42,7 +43,18 @@ async function ensureCanEdit(
 export async function createTrip(
   destinationSlug: string
 ): Promise<ActionResult> {
-  const destination = getDestination(destinationSlug);
+  // Seed guides have rich metadata; otherwise fall back to the generated
+  // catalog (any searched country or major city).
+  const seed = getDestination(destinationSlug);
+  const destination = seed
+    ? { slug: seed.slug, name: seed.name, country: seed.country }
+    : (() => {
+        const place = resolveCatalogDestination(destinationSlug);
+        return place
+          ? { slug: place.slug, name: place.name, country: place.country }
+          : null;
+      })();
+
   if (!destination) return { error: "That destination no longer exists." };
 
   const supabase = createClient();

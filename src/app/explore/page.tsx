@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import ExploreBrowser from "@/components/explore/ExploreBrowser";
+import DestinationSearch from "@/components/DestinationSearch";
 import { DESTINATIONS } from "@/data/destinations";
 
 export const metadata: Metadata = {
@@ -16,9 +17,12 @@ export default function ExplorePage() {
           Explore destinations
         </h1>
         <p className="mt-3 text-lg text-neutral-600">
-          Find your next adventure. Search by name or filter by the kind of trip
-          you&apos;re dreaming of.
+          Search any city or country, or browse our hand-picked guides by the
+          kind of trip you&apos;re dreaming of.
         </p>
+        <div className="mt-6">
+          <DestinationSearch placeholder="Search any city or country…" />
+        </div>
       </header>
 
       <ExploreBrowser destinations={DESTINATIONS} />

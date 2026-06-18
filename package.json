@@ -12,6 +12,7 @@
     "generate:destinations": "node scripts/generate-destinations.mjs",
     "seed:cities": "node scripts/seed-cities.mjs",
     "fetch:guides": "node scripts/guides/fetch-country-data.mjs",
+    "generate:guides": "node scripts/guides/generate-guide.mjs",
     "test": "vitest run"
   },
   "repository": {
@@ -22,6 +23,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.105.0",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.45.4",
     "gray-matter": "^4.0.3",

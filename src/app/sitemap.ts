@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { DESTINATIONS } from "@/data/destinations";
 import { getAllPosts } from "@/lib/blog/posts";
+import { getAllGuides } from "@/lib/guides";
 
 const BASE_URL = "https://wanderly.travel";
 
@@ -61,5 +62,27 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.7,
   }));
 
-  return [...staticRoutes, ...destinationRoutes, ...blogRoutes];
+  const guides = getAllGuides();
+  const guideIndexRoute: MetadataRoute.Sitemap = [
+    {
+      url: `${BASE_URL}/guides`,
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.9,
+    },
+  ];
+  const guideRoutes: MetadataRoute.Sitemap = guides.map((g) => ({
+    url: `${BASE_URL}/guides/${g.slug}`,
+    lastModified: g.lastUpdated ? new Date(g.lastUpdated) : now,
+    changeFrequency: "monthly" as const,
+    priority: 0.85,
+  }));
+
+  return [
+    ...staticRoutes,
+    ...destinationRoutes,
+    ...blogRoutes,
+    ...guideIndexRoute,
+    ...guideRoutes,
+  ];
 }

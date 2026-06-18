@@ -81,10 +81,7 @@ function compareEntries(
   return a.entry.name.localeCompare(b.entry.name);
 }
 
-export function searchDestinations(
-  query: string,
-  limit = 8
-): SearchResult {
+export function searchDestinations(query: string, limit = 8): SearchResult {
   if (!query.trim()) return { results: [], totalMatches: 0 };
 
   const q = query.toLowerCase();

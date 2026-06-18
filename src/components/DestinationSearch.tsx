@@ -272,7 +272,7 @@ export default function DestinationSearch({
 
               {overflow > 0 && (
                 <li
-                  aria-disabled="true"
+                  role="presentation"
                   className="border-t border-neutral-100 px-4 py-2.5 text-center text-xs font-medium text-neutral-400"
                 >
                   +{overflow} more results

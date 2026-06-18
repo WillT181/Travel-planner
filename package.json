@@ -13,6 +13,8 @@
     "seed:cities": "node scripts/seed-cities.mjs",
     "fetch:guides": "node scripts/guides/fetch-country-data.mjs",
     "generate:guides": "node scripts/guides/generate-guide.mjs",
+    "verify:guides": "node scripts/guides/verify-guide.mjs",
+    "build:guides": "node scripts/guides/build-all.mjs",
     "test": "vitest run"
   },
   "repository": {

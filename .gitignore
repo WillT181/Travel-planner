@@ -19,3 +19,6 @@ preview/
 # Editor
 .vscode/
 *.swp
+
+# TypeScript incremental build cache
+*.tsbuildinfo

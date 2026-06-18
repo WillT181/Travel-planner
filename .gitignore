@@ -22,3 +22,6 @@ preview/
 
 # TypeScript incremental build cache
 *.tsbuildinfo
+
+# Generated guide data (API-fetched, not committed)
+scripts/guides/data/

@@ -11,6 +11,7 @@
     "preview": "node scripts/generate-preview.mjs",
     "generate:destinations": "node scripts/generate-destinations.mjs",
     "seed:cities": "node scripts/seed-cities.mjs",
+    "fetch:guides": "node scripts/guides/fetch-country-data.mjs",
     "test": "vitest run"
   },
   "repository": {

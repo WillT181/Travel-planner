@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { searchDestinations, type IndexEntry } from "@/lib/destinationSearch";
 import { cn } from "@/lib/utils";
@@ -51,20 +51,33 @@ function ClearButton({ onClick }: { onClick: () => void }) {
 
 interface ResultRowProps {
   entry: IndexEntry;
+  id: string;
+  isHighlighted: boolean;
   onSelect: (entry: IndexEntry) => void;
+  onMouseEnter: () => void;
 }
 
-function ResultRow({ entry, onSelect }: ResultRowProps) {
+const ResultRow = forwardRef<HTMLLIElement, ResultRowProps>(function ResultRow(
+  { entry, id, isHighlighted, onSelect, onMouseEnter },
+  ref
+) {
   return (
     <li
+      ref={ref}
+      id={id}
       role="option"
-      aria-selected={false}
+      aria-selected={isHighlighted}
+      onMouseEnter={onMouseEnter}
       onMouseDown={(e) => {
         // Prevent the input from blurring before the click registers.
         e.preventDefault();
         onSelect(entry);
       }}
-      className="flex cursor-pointer items-center gap-3 border-b border-neutral-100 px-4 py-3 transition-colors last:border-b-0 hover:bg-primary-50"
+      className={cn(
+        "flex cursor-pointer items-center gap-3",
+        "border-b border-neutral-100 px-4 py-3 transition-colors last:border-b-0",
+        isHighlighted ? "bg-primary-50" : "hover:bg-primary-50"
+      )}
     >
       <span className="shrink-0 text-xl leading-none" aria-hidden="true">
         {entry.flag}
@@ -79,7 +92,7 @@ function ResultRow({ entry, onSelect }: ResultRowProps) {
       </span>
     </li>
   );
-}
+});
 
 export interface DestinationSearchProps {
   placeholder?: string;
@@ -94,7 +107,14 @@ export default function DestinationSearch({
 }: DestinationSearchProps) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+
   const containerRef = useRef<HTMLDivElement>(null);
+  // Refs to each interactive row so we can scrollIntoView on keyboard nav.
+  const rowRefs = useRef<(HTMLLIElement | null)[]>([]);
+
+  const listboxId = useId();
+  const optionPrefix = useId();
 
   const debouncedQuery = useDebouncedValue(query, 150);
 
@@ -106,6 +126,18 @@ export default function DestinationSearch({
   const hasQuery = debouncedQuery.trim().length > 0;
   const showDropdown = open && query.trim().length > 0;
   const overflow = totalMatches - results.length;
+
+  // Reset highlight whenever the user changes the query.
+  useEffect(() => {
+    setHighlightedIndex(-1);
+  }, [query]);
+
+  // Scroll the highlighted row into view when navigating with the keyboard.
+  useEffect(() => {
+    if (highlightedIndex >= 0) {
+      rowRefs.current[highlightedIndex]?.scrollIntoView({ block: "nearest" });
+    }
+  }, [highlightedIndex]);
 
   // Close dropdown on outside click.
   useEffect(() => {
@@ -129,6 +161,7 @@ export default function DestinationSearch({
   function handleClear() {
     setQuery("");
     setOpen(false);
+    setHighlightedIndex(-1);
   }
 
   function handleSelect(entry: IndexEntry) {
@@ -136,7 +169,37 @@ export default function DestinationSearch({
     console.log("Selected destination:", entry);
     setQuery(entry.name);
     setOpen(false);
+    setHighlightedIndex(-1);
   }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Escape") {
+      // Close and clear highlight but keep the typed query and focus.
+      setOpen(false);
+      setHighlightedIndex(-1);
+      return;
+    }
+
+    if (!showDropdown || results.length === 0) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightedIndex((i) => (i + 1) % results.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightedIndex((i) => (i <= 0 ? results.length - 1 : i - 1));
+    } else if (e.key === "Enter") {
+      if (highlightedIndex >= 0 && results[highlightedIndex]) {
+        e.preventDefault();
+        handleSelect(results[highlightedIndex]);
+      }
+    }
+  }
+
+  const activeDescendant =
+    showDropdown && highlightedIndex >= 0
+      ? `${optionPrefix}-${highlightedIndex}`
+      : undefined;
 
   return (
     <div ref={containerRef} className={cn("relative w-full", className)}>
@@ -148,19 +211,20 @@ export default function DestinationSearch({
 
         <input
           type="text"
+          role="combobox"
           autoComplete="off"
           autoFocus={autoFocus}
           spellCheck={false}
           value={query}
           placeholder={placeholder}
           aria-label="Search destinations"
-          aria-haspopup="listbox"
           aria-expanded={showDropdown}
+          aria-controls={listboxId}
+          aria-autocomplete="list"
+          aria-activedescendant={activeDescendant}
           onChange={handleChange}
           onFocus={() => setOpen(true)}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") handleClear();
-          }}
+          onKeyDown={handleKeyDown}
           className="h-14 w-full rounded-xl border border-neutral-200 bg-white pl-12 pr-12 text-base text-neutral-900 shadow-sm transition-shadow placeholder:text-neutral-400 hover:border-neutral-300 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-1"
         />
 
@@ -174,6 +238,7 @@ export default function DestinationSearch({
       {/* Dropdown panel */}
       {showDropdown && (
         <ul
+          id={listboxId}
           role="listbox"
           aria-label="Destination suggestions"
           className="absolute left-0 right-0 top-full z-30 mt-2 max-h-80 overflow-y-auto rounded-xl border border-neutral-200 bg-white shadow-lg"
@@ -191,11 +256,17 @@ export default function DestinationSearch({
             </li>
           ) : (
             <>
-              {results.map((entry) => (
+              {results.map((entry, index) => (
                 <ResultRow
                   key={`${entry.type}-${entry.slug}`}
+                  ref={(el) => {
+                    rowRefs.current[index] = el;
+                  }}
+                  id={`${optionPrefix}-${index}`}
                   entry={entry}
+                  isHighlighted={index === highlightedIndex}
                   onSelect={handleSelect}
+                  onMouseEnter={() => setHighlightedIndex(index)}
                 />
               ))}
 

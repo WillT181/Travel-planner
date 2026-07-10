@@ -98,15 +98,24 @@ export interface DestinationSearchProps {
   placeholder?: string;
   autoFocus?: boolean;
   className?: string;
+  /** Extra classes merged onto the input (e.g. to attach a button). */
+  inputClassName?: string;
   /** Called when the user picks a result. Defaults to logging the selection. */
   onSelect?: (entry: IndexEntry) => void;
+  /** Called on Enter when no result is highlighted (free-text submit). */
+  onSubmitText?: (text: string) => void;
+  /** Notified whenever the raw query text changes (incl. select/clear). */
+  onQueryChange?: (query: string) => void;
 }
 
 export default function DestinationSearch({
   placeholder = "Search any city or country…",
   autoFocus = false,
   className,
+  inputClassName,
   onSelect,
+  onSubmitText,
+  onQueryChange,
 }: DestinationSearchProps) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -158,11 +167,13 @@ export default function DestinationSearch({
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     setQuery(e.target.value);
+    onQueryChange?.(e.target.value);
     setOpen(true);
   }
 
   function handleClear() {
     setQuery("");
+    onQueryChange?.("");
     setOpen(false);
     setHighlightedIndex(-1);
   }
@@ -174,6 +185,7 @@ export default function DestinationSearch({
       console.log("Selected destination:", entry);
     }
     setQuery(entry.name);
+    onQueryChange?.(entry.name);
     setOpen(false);
     setHighlightedIndex(-1);
   }
@@ -186,6 +198,19 @@ export default function DestinationSearch({
       return;
     }
 
+    if (e.key === "Enter") {
+      if (showDropdown && highlightedIndex >= 0 && results[highlightedIndex]) {
+        e.preventDefault();
+        handleSelect(results[highlightedIndex]);
+      } else if (onSubmitText) {
+        // Free-text submit — nothing highlighted in the dropdown.
+        e.preventDefault();
+        setOpen(false);
+        onSubmitText(query.trim());
+      }
+      return;
+    }
+
     if (!showDropdown || results.length === 0) return;
 
     if (e.key === "ArrowDown") {
@@ -194,11 +219,6 @@ export default function DestinationSearch({
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setHighlightedIndex((i) => (i <= 0 ? results.length - 1 : i - 1));
-    } else if (e.key === "Enter") {
-      if (highlightedIndex >= 0 && results[highlightedIndex]) {
-        e.preventDefault();
-        handleSelect(results[highlightedIndex]);
-      }
     }
   }
 
@@ -231,7 +251,10 @@ export default function DestinationSearch({
           onChange={handleChange}
           onFocus={() => setOpen(true)}
           onKeyDown={handleKeyDown}
-          className="h-14 w-full rounded-xl border border-neutral-200 bg-white pl-12 pr-12 text-base text-neutral-900 shadow-sm transition-shadow placeholder:text-neutral-400 hover:border-neutral-300 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-1"
+          className={cn(
+            "h-14 w-full rounded-xl border border-neutral-200 bg-white pl-12 pr-12 text-base text-neutral-900 shadow-sm transition-shadow placeholder:text-neutral-400 hover:border-neutral-300 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-1",
+            inputClassName
+          )}
         />
 
         {query.length > 0 && (

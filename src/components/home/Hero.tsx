@@ -1,4 +1,4 @@
-import DestinationSearch from "@/components/DestinationSearch";
+import HeroSearch from "@/components/home/HeroSearch";
 
 const TRUST_BADGES = [
   "100k+ trips planned",
@@ -81,12 +81,12 @@ export default function Hero() {
           keep every booking, idea, and map pin in one organised place.
         </p>
 
-        <div className="mt-8 w-full max-w-xl">
-          <DestinationSearch placeholder="Where to? Try “Lisbon” or “Japan”" />
+        <div className="mt-8 flex w-full justify-center">
+          <HeroSearch />
         </div>
 
         <ul
-          className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2"
+          className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2"
           aria-label="Why travellers choose us"
         >
           {TRUST_BADGES.map((badge) => (

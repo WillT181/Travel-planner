@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   type Destination,
   type Mood,
@@ -86,13 +87,24 @@ export default function ExploreBrowser({
 }: {
   destinations: Destination[];
 }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  // ?q= comes from the homepage hero's free-text search.
+  const query = (searchParams.get("q") ?? "").trim();
+
   const [activeFilter, setActiveFilter] = useState<Filter>("All");
 
   const filtered = useMemo(() => {
-    return destinations.filter(
-      (d) => activeFilter === "All" || d.moods.includes(activeFilter)
-    );
-  }, [destinations, activeFilter]);
+    const q = query.toLowerCase();
+    return destinations.filter((d) => {
+      if (activeFilter !== "All" && !d.moods.includes(activeFilter))
+        return false;
+      if (!q) return true;
+      return (
+        d.name.toLowerCase().includes(q) || d.country.toLowerCase().includes(q)
+      );
+    });
+  }, [destinations, activeFilter, query]);
 
   return (
     <div>
@@ -127,6 +139,19 @@ export default function ExploreBrowser({
         {filtered.length}{" "}
         {filtered.length === 1 ? "destination" : "destinations"}
         {activeFilter !== "All" ? ` in ${activeFilter}` : ""}
+        {query && (
+          <>
+            {" "}
+            matching &ldquo;{query}&rdquo;{" "}
+            <button
+              type="button"
+              onClick={() => router.push("/explore")}
+              className="ml-1 font-medium text-primary-700 underline underline-offset-2 hover:text-primary-900"
+            >
+              Clear
+            </button>
+          </>
+        )}
       </p>
 
       {/* Grid */}

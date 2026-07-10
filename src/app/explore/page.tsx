@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import ExploreBrowser from "@/components/explore/ExploreBrowser";
 import DestinationSearch from "@/components/DestinationSearch";
 import { DESTINATIONS } from "@/data/destinations";
@@ -25,7 +26,10 @@ export default function ExplorePage() {
         </div>
       </header>
 
-      <ExploreBrowser destinations={DESTINATIONS} />
+      {/* Suspense: ExploreBrowser reads ?q= via useSearchParams */}
+      <Suspense>
+        <ExploreBrowser destinations={DESTINATIONS} />
+      </Suspense>
     </div>
   );
 }

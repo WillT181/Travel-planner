@@ -98,12 +98,15 @@ export interface DestinationSearchProps {
   placeholder?: string;
   autoFocus?: boolean;
   className?: string;
+  /** Called when the user picks a result. Defaults to logging the selection. */
+  onSelect?: (entry: IndexEntry) => void;
 }
 
 export default function DestinationSearch({
   placeholder = "Search any city or country…",
   autoFocus = false,
   className,
+  onSelect,
 }: DestinationSearchProps) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -165,8 +168,11 @@ export default function DestinationSearch({
   }
 
   function handleSelect(entry: IndexEntry) {
-    // Navigation wired in the next prompt.
-    console.log("Selected destination:", entry);
+    if (onSelect) {
+      onSelect(entry);
+    } else {
+      console.log("Selected destination:", entry);
+    }
     setQuery(entry.name);
     setOpen(false);
     setHighlightedIndex(-1);

@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { DESTINATIONS } from "@/data/destinations";
+import { COUNTRIES, MAJOR_CITIES } from "@/lib/destinations/catalog";
 import { getAllPosts } from "@/lib/blog/posts";
 import { getAllGuides } from "@/lib/guides";
 
@@ -54,6 +55,27 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.8,
   }));
 
+  // Every /explore destination page: all countries + capital cities from the
+  // generated catalog (seed guides above take the higher priority). Non-capital
+  // major cities are excluded to keep the sitemap focused on strong pages.
+  const seedSlugs = new Set(DESTINATIONS.map((d) => d.slug));
+  const countryRoutes: MetadataRoute.Sitemap = COUNTRIES.filter(
+    (c) => !seedSlugs.has(c.slug)
+  ).map((c) => ({
+    url: `${BASE_URL}/explore/${c.slug}`,
+    lastModified: now,
+    changeFrequency: "monthly" as const,
+    priority: 0.6,
+  }));
+  const capitalRoutes: MetadataRoute.Sitemap = MAJOR_CITIES.filter(
+    (c) => c.isCapital && !seedSlugs.has(c.slug)
+  ).map((c) => ({
+    url: `${BASE_URL}/explore/${c.slug}`,
+    lastModified: now,
+    changeFrequency: "monthly" as const,
+    priority: 0.55,
+  }));
+
   const posts = getAllPosts();
   const blogRoutes: MetadataRoute.Sitemap = posts.map((post) => ({
     url: `${BASE_URL}/blog/${post.slug}`,
@@ -81,6 +103,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
   return [
     ...staticRoutes,
     ...destinationRoutes,
+    ...countryRoutes,
+    ...capitalRoutes,
     ...blogRoutes,
     ...guideIndexRoute,
     ...guideRoutes,

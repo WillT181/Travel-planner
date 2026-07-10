@@ -5,17 +5,29 @@ interface Destination {
   country: string;
   /** picsum seed → stable placeholder image. */
   seed: string;
+  /** Canonical /explore/{slug} path segment (seed guide or catalog slug). */
+  slug: string;
 }
 
 const DESTINATIONS: Destination[] = [
-  { name: "Lisbon", country: "Portugal", seed: "lisbon" },
-  { name: "Tokyo", country: "Japan", seed: "tokyo" },
-  { name: "Bali", country: "Indonesia", seed: "bali" },
-  { name: "Marrakech", country: "Morocco", seed: "morocco" },
-  { name: "Reykjavík", country: "Iceland", seed: "iceland" },
-  { name: "New York", country: "United States", seed: "newyork" },
-  { name: "Bangkok", country: "Thailand", seed: "thailand" },
-  { name: "Amalfi Coast", country: "Italy", seed: "amalfi" },
+  { name: "Lisbon", country: "Portugal", seed: "lisbon", slug: "lisbon" },
+  { name: "Tokyo", country: "Japan", seed: "tokyo", slug: "japan/tokyo" },
+  { name: "Bali", country: "Indonesia", seed: "bali", slug: "bali" },
+  { name: "Marrakech", country: "Morocco", seed: "morocco", slug: "marrakech" },
+  { name: "Reykjavík", country: "Iceland", seed: "iceland", slug: "reykjavik" },
+  {
+    name: "New York",
+    country: "United States",
+    seed: "newyork",
+    slug: "united-states/new-york-city",
+  },
+  { name: "Bangkok", country: "Thailand", seed: "thailand", slug: "bangkok" },
+  {
+    name: "Amalfi Coast",
+    country: "Italy",
+    seed: "amalfi",
+    slug: "amalfi-coast",
+  },
 ];
 
 function ArrowIcon() {
@@ -52,7 +64,7 @@ export default function TrendingDestinations() {
           </p>
         </div>
         <Link
-          href="/search"
+          href="/explore"
           className="text-sm font-semibold text-primary-700 hover:text-primary-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
         >
           Browse all destinations →
@@ -63,7 +75,7 @@ export default function TrendingDestinations() {
         {DESTINATIONS.map((dest) => (
           <li key={dest.seed}>
             <Link
-              href={`/search?q=${encodeURIComponent(dest.name)}`}
+              href={`/explore/${dest.slug}`}
               className="group block overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm transition-shadow hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
             >
               <div className="relative aspect-[4/3] w-full overflow-hidden bg-neutral-100">

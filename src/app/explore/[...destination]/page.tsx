@@ -19,6 +19,7 @@ import {
 import ItineraryTimeline from "@/components/explore/ItineraryTimeline";
 import LockedItineraryCard from "@/components/explore/LockedItineraryCard";
 import StartPlanningButton from "@/components/explore/StartPlanningButton";
+import HeroSearch from "@/components/home/HeroSearch";
 
 interface PageProps {
   params: { destination: string[] };
@@ -37,18 +38,23 @@ export function generateStaticParams() {
   return DESTINATIONS.map((d) => ({ destination: [d.slug] }));
 }
 
+const BASE_URL = "https://wanderly.travel";
+
 export function generateMetadata({ params }: PageProps): Metadata {
   const slug = params.destination.join("/");
+  const canonical = `${BASE_URL}/explore/${slug}`;
 
   const seed = getDestination(slug);
   if (seed) {
     return {
       title: `${seed.name} Travel Guide — ${seed.country}`,
       description: `Plan your trip to ${seed.name}. ${seed.summary} Best time to visit: ${seed.bestTimeToVisit}.`,
+      alternates: { canonical },
       openGraph: {
         title: `${seed.name} Travel Guide`,
         description: seed.summary,
         type: "website",
+        url: canonical,
         images: [destinationImage(seed.imageSeed, 1200, 630)],
       },
     };
@@ -61,9 +67,11 @@ export function generateMetadata({ params }: PageProps): Metadata {
     return {
       title: `${place.name} Travel Guide${place.kind === "city" ? ` — ${place.country}` : ""}`,
       description: `Plan your trip to ${where}. Build a day-by-day itinerary, track your budget, and keep everything in one place.`,
+      alternates: { canonical },
       openGraph: {
         title: `${place.name} Travel Guide`,
         type: "website",
+        url: canonical,
         images: [
           `https://picsum.photos/seed/${encodeURIComponent(slug)}/1200/630`,
         ],
@@ -71,7 +79,8 @@ export function generateMetadata({ params }: PageProps): Metadata {
     };
   }
 
-  return { title: "Destination not found" };
+  // Unknown destination — friendly search state; keep it out of the index.
+  return { title: "Destination not found", robots: { index: false } };
 }
 
 function QuickFact({ label, value }: { label: string; value: string }) {
@@ -94,7 +103,39 @@ export default async function DestinationPage({ params }: PageProps) {
   const place = resolvePlace(slug);
   if (place) return <GeneratedDestination place={place} slug={slug} />;
 
-  notFound();
+  return <DestinationNotFound slug={slug} />;
+}
+
+// ── Unknown slug — friendly search state instead of a bare 404 ───────────────
+
+function DestinationNotFound({ slug }: { slug: string }) {
+  const pretty = decodeURIComponent(slug).replace(/[-/]+/g, " ").trim();
+
+  return (
+    <div className="mx-auto max-w-xl py-16 text-center">
+      <p className="text-5xl" aria-hidden="true">
+        🧭
+      </p>
+      <h1 className="mt-4 text-3xl font-bold tracking-tight text-neutral-900">
+        We couldn&apos;t find &ldquo;{pretty}&rdquo;
+      </h1>
+      <p className="mt-3 text-lg text-neutral-600">
+        That destination isn&apos;t in our atlas (yet). Try searching for a city
+        or country below, or browse everywhere we cover.
+      </p>
+
+      <div className="mt-8 text-left">
+        <HeroSearch />
+      </div>
+
+      <Link
+        href="/explore"
+        className="mt-8 inline-flex items-center gap-1 text-sm font-semibold text-primary-700 hover:text-primary-900"
+      >
+        Browse all destinations →
+      </Link>
+    </div>
+  );
 }
 
 // ── Seed (curated) destination — the rich, hand-written guide ────────────────

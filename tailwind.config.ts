@@ -51,6 +51,9 @@ const config: Config = {
       },
       fontFamily: {
         sans: ["var(--font-inter)", "Inter", "system-ui", "sans-serif"],
+        // Wanderly Home redesign (claude.ai/design import)
+        display: ["var(--font-bricolage)", "serif"],
+        instrument: ["var(--font-instrument)", "system-ui", "sans-serif"],
       },
     },
   },

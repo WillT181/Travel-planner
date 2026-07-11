@@ -100,6 +100,12 @@ export interface DestinationSearchProps {
   className?: string;
   /** Extra classes merged onto the input (e.g. to attach a button). */
   inputClassName?: string;
+  /**
+   * "bare" strips the built-in chrome (border, background, icon) so the
+   * combobox can live inside a custom shell like the homepage pill search.
+   * Dropdown behaviour is unchanged.
+   */
+  variant?: "default" | "bare";
   /** Called when the user picks a result. Defaults to logging the selection. */
   onSelect?: (entry: IndexEntry) => void;
   /** Called on Enter when no result is highlighted (free-text submit). */
@@ -113,6 +119,7 @@ export default function DestinationSearch({
   autoFocus = false,
   className,
   inputClassName,
+  variant = "default",
   onSelect,
   onSubmitText,
   onQueryChange,
@@ -227,13 +234,17 @@ export default function DestinationSearch({
       ? `${optionPrefix}-${highlightedIndex}`
       : undefined;
 
+  const isBare = variant === "bare";
+
   return (
     <div ref={containerRef} className={cn("relative w-full", className)}>
       {/* Input */}
       <div className="relative">
-        <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
-          <SearchIcon />
-        </span>
+        {!isBare && (
+          <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+            <SearchIcon />
+          </span>
+        )}
 
         <input
           type="text"
@@ -252,13 +263,20 @@ export default function DestinationSearch({
           onFocus={() => setOpen(true)}
           onKeyDown={handleKeyDown}
           className={cn(
-            "h-14 w-full rounded-xl border border-neutral-200 bg-white pl-12 pr-12 text-base text-neutral-900 shadow-sm transition-shadow placeholder:text-neutral-400 hover:border-neutral-300 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-1",
+            isBare
+              ? "h-12 w-full border-0 bg-transparent pr-9 text-base text-[#22303A] placeholder:text-neutral-400 focus:outline-none focus:ring-0"
+              : "h-14 w-full rounded-xl border border-neutral-200 bg-white pl-12 pr-12 text-base text-neutral-900 shadow-sm transition-shadow placeholder:text-neutral-400 hover:border-neutral-300 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-1",
             inputClassName
           )}
         />
 
         {query.length > 0 && (
-          <span className="absolute inset-y-0 right-0 flex items-center pr-4">
+          <span
+            className={cn(
+              "absolute inset-y-0 right-0 flex items-center",
+              isBare ? "pr-0" : "pr-4"
+            )}
+          >
             <ClearButton onClick={handleClear} />
           </span>
         )}

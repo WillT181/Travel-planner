@@ -5,43 +5,43 @@
 @layer base {
   :root {
     /* Primary — teal */
-    --color-primary-50:  240 253 250;
+    --color-primary-50: 240 253 250;
     --color-primary-100: 204 251 241;
     --color-primary-200: 153 246 228;
-    --color-primary-300:  94 234 212;
-    --color-primary-400:  45 212 191;
-    --color-primary-500:  20 184 166;
-    --color-primary-600:  13 148 136;
-    --color-primary-700:  15 118 110;
-    --color-primary-800:  17  94  89;
-    --color-primary-900:  19  78  74;
-    --color-primary-950:   4  47  46;
+    --color-primary-300: 94 234 212;
+    --color-primary-400: 45 212 191;
+    --color-primary-500: 20 184 166;
+    --color-primary-600: 13 148 136;
+    --color-primary-700: 15 118 110;
+    --color-primary-800: 17 94 89;
+    --color-primary-900: 19 78 74;
+    --color-primary-950: 4 47 46;
 
     /* Accent — amber */
-    --color-accent-50:  255 251 235;
+    --color-accent-50: 255 251 235;
     --color-accent-100: 254 243 199;
     --color-accent-200: 253 230 138;
-    --color-accent-300: 252 211  77;
-    --color-accent-400: 251 191  36;
-    --color-accent-500: 245 158  11;
-    --color-accent-600: 217 119   6;
-    --color-accent-700: 180  83   9;
-    --color-accent-800: 146  64  14;
-    --color-accent-900: 120  53  15;
-    --color-accent-950:  69  26   3;
+    --color-accent-300: 252 211 77;
+    --color-accent-400: 251 191 36;
+    --color-accent-500: 245 158 11;
+    --color-accent-600: 217 119 6;
+    --color-accent-700: 180 83 9;
+    --color-accent-800: 146 64 14;
+    --color-accent-900: 120 53 15;
+    --color-accent-950: 69 26 3;
 
     /* Neutral — slate */
-    --color-neutral-50:  248 250 252;
+    --color-neutral-50: 248 250 252;
     --color-neutral-100: 241 245 249;
     --color-neutral-200: 226 232 240;
     --color-neutral-300: 203 213 225;
     --color-neutral-400: 148 163 184;
     --color-neutral-500: 100 116 139;
-    --color-neutral-600:  71  85 105;
-    --color-neutral-700:  51  65  85;
-    --color-neutral-800:  30  41  59;
-    --color-neutral-900:  15  23  42;
-    --color-neutral-950:   2   6  23;
+    --color-neutral-600: 71 85 105;
+    --color-neutral-700: 51 65 85;
+    --color-neutral-800: 30 41 59;
+    --color-neutral-900: 15 23 42;
+    --color-neutral-950: 2 6 23;
   }
 
   html {
@@ -52,6 +52,10 @@
   body {
     @apply bg-neutral-50 text-neutral-900;
     line-height: 1.6;
+    /* Full-bleed sections (homepage) use w-screen breakouts; clip the
+       scrollbar-width sliver without creating a scroll container (clip,
+       unlike hidden, keeps position: sticky working). */
+    overflow-x: clip;
   }
 }
 

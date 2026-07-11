@@ -1,52 +1,37 @@
 import Link from "next/link";
-import { buttonVariants } from "@/components/ui/Button";
 
 export default function UpgradeCta() {
   return (
-    <section className="py-16 sm:py-20" aria-labelledby="upgrade-heading">
-      <div className="relative overflow-hidden rounded-3xl bg-primary-700 px-6 py-14 text-center sm:px-12">
-        {/* Soft accent glows */}
+    <section
+      id="pricing"
+      aria-labelledby="cta-heading"
+      className="px-[clamp(20px,5vw,56px)] py-[clamp(48px,7vw,96px)]"
+    >
+      <div
+        className="relative mx-auto flex max-w-[880px] flex-col items-center gap-[18px] overflow-hidden rounded-[28px] px-[clamp(24px,5vw,56px)] py-[clamp(36px,6vw,64px)] text-center"
+        style={{ background: "linear-gradient(150deg, #145C6B, #1E8A97)" }}
+      >
+        {/* Amber glow accent */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-accent-500/20 blur-3xl"
-        />
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -bottom-20 -left-12 h-64 w-64 rounded-full bg-primary-400/30 blur-3xl"
+          className="absolute -right-[60px] -top-[60px] h-[220px] w-[220px] rounded-full bg-[#ED9B40]/25 blur-[2px]"
         />
 
-        <div className="relative mx-auto max-w-2xl">
-          <h2
-            id="upgrade-heading"
-            className="text-3xl font-bold tracking-tight text-white sm:text-4xl"
-          >
-            Ready to travel smarter? Upgrade to Pro
-          </h2>
-          <p className="mt-4 text-lg text-primary-100">
-            Unlock unlimited trips, collaborative planning, offline maps, and
-            priority support — everything you need for the big adventures.
-          </p>
-
-          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link
-              href="/pricing"
-              className={buttonVariants({
-                variant: "primary",
-                size: "lg",
-                className:
-                  "bg-accent-500 hover:bg-accent-600 focus-visible:ring-accent-400 focus-visible:ring-offset-primary-700",
-              })}
-            >
-              Upgrade to Pro
-            </Link>
-            <Link
-              href="/itinerary"
-              className="text-sm font-semibold text-primary-100 underline-offset-4 hover:text-white hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-primary-700 rounded"
-            >
-              Or start free →
-            </Link>
-          </div>
-        </div>
+        <h2
+          id="cta-heading"
+          className="relative max-w-[560px] font-display text-[clamp(28px,5vw,44px)] font-extrabold tracking-[-0.02em] text-[#FDFBF7] [text-wrap:pretty]"
+        >
+          Somewhere is waiting. Start the plan.
+        </h2>
+        <p className="relative max-w-[440px] text-base text-[#C9E7E9]">
+          Free forever for your first trip. No card, no countdown.
+        </p>
+        <Link
+          href="/itinerary"
+          className="relative inline-flex min-h-[56px] items-center rounded-full bg-[#ED9B40] px-[34px] py-4 text-[17px] font-semibold text-[#3A2408] transition-all hover:-translate-y-px hover:bg-[#DE8B2F] focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#145C6B]"
+        >
+          Start planning — free
+        </Link>
       </div>
     </section>
   );

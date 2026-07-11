@@ -1,105 +1,57 @@
-import HeroSearch from "@/components/home/HeroSearch";
+import Link from "next/link";
+import PillSearch from "@/components/home/PillSearch";
 
-const TRUST_BADGES = [
-  "100k+ trips planned",
-  "Free to start",
-  "No credit card needed",
+const QUICK_PICKS = [
+  { label: "Lisbon", href: "/explore/lisbon" },
+  { label: "Kyoto", href: "/explore/kyoto" },
+  { label: "Mexico City", href: "/explore/mexico/mexico-city" },
+  { label: "Crete", href: "/explore/greece" },
+  { label: "Marrakech", href: "/explore/marrakech" },
 ] as const;
-
-function CheckIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      className="h-4 w-4 text-primary-600"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M20 6 9 17l-5-5" />
-    </svg>
-  );
-}
-
-/** Decorative dotted world-map silhouette used as a soft background accent. */
-function WorldMapAccent() {
-  return (
-    <svg
-      className="absolute inset-0 h-full w-full text-primary-200/50"
-      viewBox="0 0 1200 500"
-      fill="none"
-      preserveAspectRatio="xMidYMid slice"
-      aria-hidden="true"
-    >
-      <defs>
-        <pattern
-          id="map-dots"
-          width="16"
-          height="16"
-          patternUnits="userSpaceOnUse"
-        >
-          <circle cx="2" cy="2" r="2" fill="currentColor" />
-        </pattern>
-      </defs>
-      {/* Loose continent blobs filled with the dot pattern */}
-      <path
-        d="M120 180 Q180 120 280 140 Q360 150 380 220 Q360 300 280 320 Q180 330 130 280 Q90 230 120 180Z"
-        fill="url(#map-dots)"
-      />
-      <path
-        d="M520 120 Q620 90 700 130 Q760 170 740 250 Q700 330 600 340 Q520 330 500 250 Q490 170 520 120Z"
-        fill="url(#map-dots)"
-      />
-      <path
-        d="M860 160 Q960 130 1050 170 Q1110 210 1080 290 Q1020 360 920 350 Q850 330 840 250 Q835 200 860 160Z"
-        fill="url(#map-dots)"
-      />
-    </svg>
-  );
-}
 
 export default function Hero() {
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-neutral-200 bg-gradient-to-b from-primary-50 to-white px-6 py-16 sm:px-10 sm:py-20 lg:py-24">
-      <WorldMapAccent />
+    <section
+      className="flex flex-col items-center gap-[22px] px-[clamp(20px,5vw,56px)] pb-[clamp(48px,7vw,88px)] pt-[clamp(44px,8vw,96px)] text-center"
+      style={{
+        background:
+          "radial-gradient(120% 90% at 50% 0%, #FBEEDC 0%, #FAF6EF 55%)",
+      }}
+    >
+      <span className="rounded-full border border-[#F0D9B5] bg-[#FBEEDC] px-[15px] py-[7px] text-[13px] font-bold tracking-[0.04em] text-[#B06D14]">
+        FREE TO START · NO CARD NEEDED
+      </span>
 
-      <div className="relative mx-auto flex max-w-3xl flex-col items-center text-center">
-        <span className="mb-5 inline-flex items-center gap-2 rounded-full border border-primary-200 bg-white px-4 py-1.5 text-sm font-medium text-primary-700">
-          <span className="h-2 w-2 rounded-full bg-accent-500" />
-          Your all-in-one trip planner
-        </span>
+      <h1 className="max-w-[760px] font-display text-[clamp(38px,7vw,68px)] font-extrabold leading-[1.04] tracking-[-0.025em] text-[#22303A] [text-wrap:pretty]">
+        The fun part of the trip starts{" "}
+        <em className="not-italic text-[#17727F]">before</em> you go
+      </h1>
 
-        <h1 className="text-4xl font-bold tracking-tight text-neutral-900 sm:text-5xl lg:text-6xl">
-          Plan your perfect trip, stress-free
-        </h1>
+      <p className="max-w-[540px] text-[clamp(16px,2vw,19px)] leading-[1.55] text-[#5E6E76] [text-wrap:pretty]">
+        Turn &ldquo;we should go somewhere&rdquo; into a day-by-day plan
+        you&apos;ll actually follow — together, in minutes.
+      </p>
 
-        <p className="mt-5 max-w-xl text-lg text-neutral-600">
-          Search any destination, build a day-by-day itinerary in minutes, and
-          keep every booking, idea, and map pin in one organised place.
-        </p>
-
-        <div className="mt-8 flex w-full justify-center">
-          <HeroSearch />
-        </div>
-
-        <ul
-          className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2"
-          aria-label="Why travellers choose us"
-        >
-          {TRUST_BADGES.map((badge) => (
-            <li
-              key={badge}
-              className="flex items-center gap-1.5 text-sm font-medium text-neutral-600"
+      {/* Search + quick picks */}
+      <div className="mt-2 flex w-full max-w-[640px] flex-col gap-3.5">
+        <PillSearch />
+        <div className="flex flex-wrap justify-center gap-2">
+          {QUICK_PICKS.map(({ label, href }) => (
+            <Link
+              key={label}
+              href={href}
+              className="inline-flex min-h-[40px] items-center rounded-full bg-[#DFF1F2] px-4 py-2.5 text-[13.5px] font-semibold text-[#17727F] transition-colors hover:bg-[#C9E7E9] hover:text-[#145C6B] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E8A97] focus-visible:ring-offset-2"
             >
-              <CheckIcon />
-              {badge}
-            </li>
+              {label}
+            </Link>
           ))}
-        </ul>
+        </div>
       </div>
+
+      <span className="text-[13.5px] text-[#5E6E76]">
+        Trusted by <strong className="text-[#22303A]">120k</strong> holiday
+        planners · ★ 4.8 average
+      </span>
     </section>
   );
 }

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Bricolage_Grotesque, Instrument_Sans } from "next/font/google";
 import Navbar from "@/components/nav/Navbar";
 import Footer from "@/components/layout/Footer";
 import CookieConsent from "@/components/consent/CookieConsent";
@@ -9,6 +9,19 @@ import "@/styles/globals.css";
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
+  display: "swap",
+});
+
+// Homepage redesign (claude.ai/design "Wanderly Home") display + body faces.
+const bricolage = Bricolage_Grotesque({
+  subsets: ["latin"],
+  variable: "--font-bricolage",
+  display: "swap",
+});
+
+const instrument = Instrument_Sans({
+  subsets: ["latin"],
+  variable: "--font-instrument",
   display: "swap",
 });
 
@@ -27,7 +40,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html
+      lang="en"
+      className={`${inter.variable} ${bricolage.variable} ${instrument.variable}`}
+    >
       <body className="flex min-h-dvh flex-col">
         <a
           href="#main-content"

@@ -19,6 +19,8 @@ export interface BuilderActivity {
   notes: string | null;
   cost: number | null;
   sortOrder: number;
+  /** "Tick it off" — optional so pre-existing localStorage trips still load. */
+  done?: boolean;
 }
 
 export interface BuilderDay {

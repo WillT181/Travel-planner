@@ -22,6 +22,7 @@ interface DbActivity {
   notes: string | null;
   cost: number | null;
   sort_order: number;
+  done?: boolean | null;
 }
 
 interface DbDay {
@@ -30,6 +31,37 @@ interface DbDay {
   date: string | null;
   activities: DbActivity[];
 }
+
+/** Cream full-bleed shell for the builder (Wanderly Builder design). */
+function BuilderShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="relative left-1/2 -my-8 w-screen -translate-x-1/2 bg-[#FAF6EF]">
+      <div className="mx-auto w-full max-w-[1160px] px-4 py-8 pb-24 sm:px-6 lg:px-10">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+const TRIP_SELECT_WITH_DONE = `
+  id, title, destination_slug, destination_name, country,
+  start_date, end_date, traveller_count,
+  trip_days (
+    id, day_number, date,
+    activities ( id, time_of_day, title, notes, cost, sort_order, done )
+  )
+`;
+
+// Fallback for databases where migration 0010 (activities.done) hasn't run
+// yet — the builder still works, the done toggle just won't persist.
+const TRIP_SELECT_LEGACY = `
+  id, title, destination_slug, destination_name, country,
+  start_date, end_date, traveller_count,
+  trip_days (
+    id, day_number, date,
+    activities ( id, time_of_day, title, notes, cost, sort_order )
+  )
+`;
 
 export default async function ItineraryBuilderPage({ params }: Props) {
   const supabase = createClient();
@@ -41,9 +73,9 @@ export default async function ItineraryBuilderPage({ params }: Props) {
   // (and imports them into the account if the visitor has since signed up).
   if (isLocalTripId(params.id)) {
     return (
-      <div className="py-8">
+      <BuilderShell>
         <LocalTripGate tripId={params.id} isAuthed={Boolean(user)} />
-      </div>
+      </BuilderShell>
     );
   }
 
@@ -51,21 +83,22 @@ export default async function ItineraryBuilderPage({ params }: Props) {
     redirect(`/login?returnTo=/itinerary/${params.id}`);
   }
 
-  const { data: trip } = await supabase
+  let { data: trip } = await supabase
     .from("trips")
-    .select(
-      `
-      id, title, destination_slug, destination_name, country,
-      start_date, end_date, traveller_count,
-      trip_days (
-        id, day_number, date,
-        activities ( id, time_of_day, title, notes, cost, sort_order )
-      )
-    `
-    )
+    .select(TRIP_SELECT_WITH_DONE)
     .eq("id", params.id)
     .eq("user_id", user.id)
     .single();
+
+  if (!trip) {
+    const legacy = await supabase
+      .from("trips")
+      .select(TRIP_SELECT_LEGACY)
+      .eq("id", params.id)
+      .eq("user_id", user.id)
+      .single();
+    trip = legacy.data as typeof trip;
+  }
 
   if (!trip) notFound();
 
@@ -97,6 +130,7 @@ export default async function ItineraryBuilderPage({ params }: Props) {
           notes: a.notes,
           cost: a.cost != null ? Number(a.cost) : null,
           sortOrder: a.sort_order,
+          done: Boolean(a.done),
         })),
     })),
   };
@@ -104,13 +138,13 @@ export default async function ItineraryBuilderPage({ params }: Props) {
   const isPro = (await getUserPlan(supabase)) === "pro";
 
   return (
-    <div className="py-8">
+    <BuilderShell>
       <ItineraryBuilder
         initialTrip={initialTrip}
         mode="remote"
         isPro={isPro}
         isAuthed
       />
-    </div>
+    </BuilderShell>
   );
 }

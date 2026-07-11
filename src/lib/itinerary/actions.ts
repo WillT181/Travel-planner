@@ -190,6 +190,7 @@ export async function importLocalTrip(
           notes: a.notes ? String(a.notes).slice(0, 2000) : null,
           cost: cleanCost(a.cost),
           sort_order: a.sortOrder ?? 0,
+          done: Boolean(a.done),
         }))
       );
     }
@@ -288,6 +289,7 @@ export interface ActivityPayload {
   notes: string | null;
   cost: number | null;
   sortOrder: number;
+  done?: boolean;
 }
 
 export async function addActivityToDay(
@@ -345,6 +347,7 @@ export async function updateActivityInDay(
   if (input.cost !== undefined) patch.cost = cleanCost(input.cost);
   if (input.timeOfDay !== undefined) patch.time_of_day = input.timeOfDay;
   if (input.sortOrder !== undefined) patch.sort_order = input.sortOrder;
+  if (input.done !== undefined) patch.done = Boolean(input.done);
 
   const { error } = await supabase
     .from("activities")

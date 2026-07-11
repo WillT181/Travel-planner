@@ -5,6 +5,7 @@ const FOOTER_LINKS = [
   { href: "/blog", label: "Blog" },
   { href: "/help", label: "Help Centre" },
   { href: "/privacy", label: "Privacy" },
+  { href: "/design-system", label: "Design system" },
 ] as const;
 
 function CompassIcon() {

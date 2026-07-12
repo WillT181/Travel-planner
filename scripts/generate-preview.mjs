@@ -137,7 +137,7 @@ function renderHtml(shots, info, generatedAt) {
 <header>
   <div class="title"><span class="dot"></span> Wanderly — Visual Preview</div>
   <div class="meta">Branch <strong>${info.branch}</strong> · commit <strong>${info.commit}</strong>${info.subject ? ` · ${info.subject}` : ""} · generated ${generatedAt}</div>
-  <div class="note">Static snapshot of the running app. Images load real photos online; if blank, this machine had no network to picsum.photos at capture time. Re-run <code>npm run preview</code> to refresh after code changes.</div>
+  <div class="note">Static snapshot of the running app. Images load real photos online when curated in images.json; uncurated destinations show branded gradients. Re-run <code>npm run preview</code> to refresh after code changes.</div>
   <nav class="tabs">${tabs}</nav>
 </header>
 <main>${panels}</main>

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { PostMeta } from "@/lib/blog/posts";
+import DestinationPhoto from "@/components/images/DestinationPhoto";
+import { BLOG_COVER_KEYS } from "@/lib/images";
 
 const CATEGORIES = [
   "All",
@@ -12,10 +14,6 @@ const CATEGORIES = [
   "Hidden gems",
 ] as const;
 type Category = (typeof CATEGORIES)[number];
-
-function coverUrl(seed: string) {
-  return `https://picsum.photos/seed/${seed}/800/450`;
-}
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-GB", {
@@ -31,12 +29,13 @@ function PostCard({ post }: { post: PostMeta }) {
       href={`/blog/${post.slug}`}
       className="group flex flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white transition hover:shadow-md"
     >
-      <div className="aspect-[16/9] overflow-hidden bg-neutral-100">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={coverUrl(post.coverImage)}
-          alt={post.title}
-          className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+      <div className="relative aspect-[16/9] overflow-hidden bg-neutral-100">
+        <DestinationPhoto
+          imageKeys={BLOG_COVER_KEYS[post.coverImage] ?? [post.coverImage]}
+          name={post.title}
+          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+          className="transition duration-300 group-hover:scale-105"
+          plainFallback
         />
       </div>
       <div className="flex flex-1 flex-col p-5">

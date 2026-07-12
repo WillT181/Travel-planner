@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { destinationImage } from "@/data/destinations";
+import DestinationPhoto from "@/components/images/DestinationPhoto";
+import { slugKeys } from "@/lib/images";
 import { buttonVariants } from "@/components/ui/Button";
 import type { WeatherSummary } from "@/lib/weather/openMeteo";
 import ScoreRing from "./ScoreRing";
@@ -38,11 +39,11 @@ export default function UpcomingTripCard({
       <div className="grid md:grid-cols-[1.1fr_1fr]">
         {/* Image */}
         <div className="relative min-h-[200px] bg-neutral-100">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={destinationImage(trip.imageSeed, 800, 600)}
-            alt={`${trip.destinationName}${trip.country ? `, ${trip.country}` : ""}`}
-            className="absolute inset-0 h-full w-full object-cover"
+          <DestinationPhoto
+            imageKeys={slugKeys(trip.imageSeed)}
+            name={trip.destinationName}
+            sizes="(max-width: 768px) 100vw, 55vw"
+            plainFallback
           />
           <div className="absolute inset-0 bg-gradient-to-t from-neutral-900/70 to-transparent md:bg-gradient-to-r" />
           <div className="absolute bottom-0 left-0 p-5">

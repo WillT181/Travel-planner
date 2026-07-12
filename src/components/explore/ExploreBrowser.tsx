@@ -3,12 +3,8 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  type Destination,
-  type Mood,
-  MOODS,
-  destinationImage,
-} from "@/data/destinations";
+import { type Destination, type Mood, MOODS } from "@/data/destinations";
+import DestinationPhoto from "@/components/images/DestinationPhoto";
 
 type Filter = Mood | "All";
 
@@ -40,12 +36,11 @@ function DestinationCard({ destination }: { destination: Destination }) {
       className="group flex flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm transition-shadow hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
     >
       <div className="relative aspect-[4/3] w-full overflow-hidden bg-neutral-100">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={destinationImage(destination.imageSeed, 600, 450)}
-          alt={`${destination.name}, ${destination.country}`}
-          loading="lazy"
-          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+        <DestinationPhoto
+          imageKeys={[destination.slug, destination.imageSeed]}
+          name={destination.name}
+          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+          className="transition-transform duration-300 group-hover:scale-105"
         />
       </div>
 

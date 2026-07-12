@@ -1,11 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import {
-  DESTINATIONS,
-  getDestination,
-  destinationImage,
-} from "@/data/destinations";
+import { DESTINATIONS, getDestination } from "@/data/destinations";
+import DestinationPhoto from "@/components/images/DestinationPhoto";
+import { slugKeys } from "@/lib/images";
 import {
   resolveCatalogDestination,
   type CatalogDestination,
@@ -55,7 +53,9 @@ export function generateMetadata({ params }: PageProps): Metadata {
         description: seed.summary,
         type: "website",
         url: canonical,
-        images: [destinationImage(seed.imageSeed, 1200, 630)],
+        images: [
+          `${BASE_URL}/api/og/destination?name=${encodeURIComponent(seed.name)}&country=${encodeURIComponent(seed.country)}&slug=${encodeURIComponent(slug)}`,
+        ],
       },
     };
   }
@@ -73,7 +73,7 @@ export function generateMetadata({ params }: PageProps): Metadata {
         type: "website",
         url: canonical,
         images: [
-          `https://picsum.photos/seed/${encodeURIComponent(slug)}/1200/630`,
+          `${BASE_URL}/api/og/destination?name=${encodeURIComponent(place.name)}&country=${encodeURIComponent(place.country)}&slug=${encodeURIComponent(slug)}`,
         ],
       },
     };
@@ -155,11 +155,13 @@ function SeedDestination({ slug }: { slug: string }) {
 
       {/* Hero */}
       <div className="relative mt-4 aspect-[21/9] w-full overflow-hidden rounded-3xl bg-neutral-100">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={destinationImage(destination.imageSeed, 1600, 700)}
-          alt={`${destination.name}, ${destination.country}`}
-          className="h-full w-full object-cover"
+        <DestinationPhoto
+          imageKeys={[destination.slug, destination.imageSeed]}
+          name={destination.name}
+          sizes="(max-width: 1280px) 100vw, 1216px"
+          priority
+          credit
+          plainFallback
         />
         <div className="absolute inset-0 bg-gradient-to-t from-neutral-900/70 to-transparent" />
         <div className="absolute bottom-0 left-0 p-6 sm:p-8">
@@ -255,7 +257,6 @@ async function GeneratedDestination({
   place: CatalogDestination;
   slug: string;
 }) {
-  const heroImage = `https://picsum.photos/seed/${encodeURIComponent(slug)}/1600/700`;
   const currency = place.currency
     ? `${place.currency}${place.currencySymbol ? ` (${place.currencySymbol})` : ""}`
     : "—";
@@ -286,11 +287,13 @@ async function GeneratedDestination({
 
       {/* Hero */}
       <div className="relative mt-4 aspect-[21/9] w-full overflow-hidden rounded-3xl bg-neutral-100">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={heroImage}
-          alt={`${place.name}${place.kind === "city" ? `, ${place.country}` : ""}`}
-          className="h-full w-full object-cover"
+        <DestinationPhoto
+          imageKeys={slugKeys(slug)}
+          name={place.name}
+          sizes="(max-width: 1280px) 100vw, 1216px"
+          priority
+          credit
+          plainFallback
         />
         <div className="absolute inset-0 bg-gradient-to-t from-neutral-900/70 to-transparent" />
         <div className="absolute bottom-0 left-0 p-6 sm:p-8">

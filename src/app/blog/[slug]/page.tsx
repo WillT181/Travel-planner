@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { MDXRemote } from "next-mdx-remote/rsc";
 import { getAllPosts, getPost } from "@/lib/blog/posts";
+import DestinationPhoto from "@/components/images/DestinationPhoto";
+import { BLOG_COVER_KEYS } from "@/lib/images";
 
 interface PageProps {
   params: { slug: string };
@@ -27,10 +29,6 @@ export async function generateMetadata({
       publishedTime: post.date,
     },
   };
-}
-
-function coverUrl(seed: string) {
-  return `https://picsum.photos/seed/${seed}/1200/630`;
 }
 
 function formatDate(iso: string) {
@@ -160,12 +158,16 @@ export default function BlogPost({ params }: PageProps) {
 
       {/* Cover image */}
       <div className="mx-auto mt-8 max-w-4xl">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={coverUrl(post.coverImage)}
-          alt={post.title}
-          className="aspect-[16/7] w-full rounded-3xl object-cover"
-        />
+        <div className="relative aspect-[16/7] w-full overflow-hidden rounded-3xl bg-neutral-100">
+          <DestinationPhoto
+            imageKeys={BLOG_COVER_KEYS[post.coverImage] ?? [post.coverImage]}
+            name={post.title}
+            sizes="(max-width: 896px) 100vw, 896px"
+            priority
+            credit
+            plainFallback
+          />
+        </div>
       </div>
 
       {/* Article body */}

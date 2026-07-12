@@ -183,9 +183,12 @@ export function isLocalPlaceId(placeId: string): boolean {
   return placeId.startsWith("local:");
 }
 
-/** Deterministic placeholder image so each destination card has a photo. */
-function photoFor(seed: string): string {
-  return `https://picsum.photos/seed/${encodeURIComponent(seed)}/1200/675`;
+/**
+ * Local-dataset places have no photo source; PlaceDetails.photoUrl is
+ * nullable and consumers render their own fallback.
+ */
+function photoFor(_seed: string): string | null {
+  return null;
 }
 
 function cityDetails(entry: CityIndexEntry): PlaceDetails {

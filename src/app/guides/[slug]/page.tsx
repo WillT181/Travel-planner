@@ -11,6 +11,7 @@ import {
   type GuideMeta,
 } from "@/lib/guides";
 import TableOfContents from "./TableOfContents";
+import DestinationPhoto from "@/components/images/DestinationPhoto";
 
 // ─── static params ─────────────────────────────────────────────────────────
 
@@ -35,8 +36,10 @@ export async function generateMetadata({
   const guide = getGuide(params.slug);
   if (!guide) return { title: "Guide not found" };
 
-  const ogUrl = new URL("/api/og/guide", BASE_URL);
+  const ogUrl = new URL("/api/og/destination", BASE_URL);
+  ogUrl.searchParams.set("name", guide.country);
   ogUrl.searchParams.set("country", guide.country);
+  ogUrl.searchParams.set("slug", guide.slug);
 
   return {
     title: guide.title,
@@ -268,12 +271,14 @@ function NearbyDestinations({ nearby }: { nearby: GuideMeta[] }) {
             href={`/guides/${g.slug}`}
             className="group flex flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm transition-shadow hover:shadow-md"
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={`https://picsum.photos/seed/${g.slug}/400/240`}
-              alt={g.country}
-              className="aspect-[5/3] w-full object-cover transition-transform duration-300 group-hover:scale-105"
-            />
+            <div className="relative aspect-[5/3] w-full overflow-hidden bg-neutral-100">
+              <DestinationPhoto
+                imageKeys={[g.slug]}
+                name={g.country}
+                sizes="(max-width: 640px) 50vw, 25vw"
+                className="transition-transform duration-300 group-hover:scale-105"
+              />
+            </div>
             <div className="p-3">
               <p className="text-sm font-semibold text-neutral-900">
                 {g.country}
@@ -308,9 +313,6 @@ export default function GuidePage({ params }: { params: { slug: string } }) {
   const part1 = splitAt > -1 ? guide.content.slice(0, splitAt) : guide.content;
   const part2 = splitAt > -1 ? guide.content.slice(splitAt) : "";
 
-  const heroImage =
-    guide.heroImage || `https://picsum.photos/seed/${guide.slug}-hero/1600/640`;
-
   return (
     <>
       {/* ── Breadcrumb ── */}
@@ -327,12 +329,13 @@ export default function GuidePage({ params }: { params: { slug: string } }) {
 
       {/* ── Hero ── */}
       <div className="relative mb-10 h-64 overflow-hidden rounded-3xl sm:h-80 lg:h-96">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={heroImage}
-          alt={guide.country}
-          className="h-full w-full object-cover"
-          fetchPriority="high"
+        <DestinationPhoto
+          imageKeys={[guide.slug]}
+          name={guide.country}
+          sizes="(max-width: 1280px) 100vw, 1216px"
+          priority
+          credit
+          plainFallback
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
         <div className="absolute bottom-0 left-0 p-6 sm:p-8">

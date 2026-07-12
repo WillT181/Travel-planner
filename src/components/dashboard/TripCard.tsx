@@ -3,7 +3,8 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { destinationImage } from "@/data/destinations";
+import DestinationPhoto from "@/components/images/DestinationPhoto";
+import { slugKeys } from "@/lib/images";
 import { deleteTrip, duplicateTrip } from "@/lib/trips/actions";
 import { buttonVariants } from "@/components/ui/Button";
 
@@ -58,11 +59,11 @@ export default function TripCard({ trip }: { trip: TripCardData }) {
   return (
     <div className="group flex flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white">
       <div className="relative aspect-[16/9] overflow-hidden bg-neutral-100">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={destinationImage(trip.imageSeed, 640, 360)}
-          alt={`${trip.destinationName}${trip.country ? `, ${trip.country}` : ""}`}
-          className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+        <DestinationPhoto
+          imageKeys={slugKeys(trip.imageSeed)}
+          name={trip.destinationName}
+          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+          className="transition duration-300 group-hover:scale-105"
         />
         <span
           className={`absolute left-3 top-3 rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_STYLES[trip.displayStatus]}`}

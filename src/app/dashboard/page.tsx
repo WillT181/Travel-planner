@@ -61,7 +61,8 @@ function displayStatus(trip: RawTrip): TripCardData["displayStatus"] {
 }
 
 function seedFor(slug: string): string {
-  return getDestination(slug)?.imageSeed ?? slug;
+  // Image lookups now key off the destination slug (see lib/images.ts).
+  return slug;
 }
 
 function firstName(displayName: string | null, email: string | null): string {

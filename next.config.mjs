@@ -1,5 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  images: {
+    remotePatterns: [
+      // Curated destination photography (see src/lib/images.ts)
+      { protocol: "https", hostname: "images.unsplash.com" },
+    ],
+  },
   async redirects() {
     return [
       // Legacy destination-search URL. /explore is the canonical pattern;

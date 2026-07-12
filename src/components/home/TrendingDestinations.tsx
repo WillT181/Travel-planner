@@ -1,4 +1,5 @@
 import Link from "next/link";
+import DestinationPhoto from "@/components/images/DestinationPhoto";
 
 interface TrendingDest {
   name: string;
@@ -7,9 +8,9 @@ interface TrendingDest {
   budget: string;
   badge: string;
   blurb: string;
-  /** picsum seed → stable placeholder image. */
-  seed: string;
-  /** Design-spec gradient — shows while the photo loads or if it fails. */
+  /** images.json lookup keys (first match wins). */
+  imageKeys: string[];
+  /** Design-spec gradient — the fallback until a photo is curated. */
   gradient: string;
 }
 
@@ -20,7 +21,7 @@ const DESTINATIONS: TrendingDest[] = [
     budget: "£60/day",
     badge: "☀ Best in spring",
     blurb: "Pastel hills, custard tarts, golden light until 9pm.",
-    seed: "lisbon",
+    imageKeys: ["lisbon", "portugal"],
     gradient: "linear-gradient(160deg, #F6C177 0%, #ED9B40 45%, #1E8A97 100%)",
   },
   {
@@ -29,7 +30,7 @@ const DESTINATIONS: TrendingDest[] = [
     budget: "£85/day",
     badge: "🍁 Peak in November",
     blurb: "Temples at dawn, ramen at midnight, maple fire in between.",
-    seed: "kyoto",
+    imageKeys: ["kyoto", "japan"],
     gradient: "linear-gradient(160deg, #C6543F 0%, #8A3B4A 55%, #22303A 100%)",
   },
   {
@@ -38,7 +39,7 @@ const DESTINATIONS: TrendingDest[] = [
     budget: "£45/day",
     badge: "🌮 Great year-round",
     blurb: "Murals, mercados, and the best £2 tacos of your life.",
-    seed: "mexico-city",
+    imageKeys: ["mexico/mexico-city", "mexico"],
     gradient: "linear-gradient(160deg, #ED9B40 0%, #C6543F 50%, #145C6B 100%)",
   },
   {
@@ -47,7 +48,7 @@ const DESTINATIONS: TrendingDest[] = [
     budget: "£55/day",
     badge: "🏖 Warm into October",
     blurb: "Two-beach days, taverna nights, family-proof distances.",
-    seed: "crete",
+    imageKeys: ["crete", "greece"],
     gradient: "linear-gradient(160deg, #7FD8E0 0%, #1E8A97 55%, #145C6B 100%)",
   },
   {
@@ -56,7 +57,7 @@ const DESTINATIONS: TrendingDest[] = [
     budget: "£40/day",
     badge: "✦ Best value",
     blurb: "Souk mazes and riad courtyards, 3 hours from London.",
-    seed: "morocco",
+    imageKeys: ["marrakech", "morocco"],
     gradient: "linear-gradient(160deg, #F2A950 0%, #C6543F 60%, #6B2F3A 100%)",
   },
   {
@@ -65,7 +66,7 @@ const DESTINATIONS: TrendingDest[] = [
     budget: "£50/day",
     badge: "🚲 Underrated gem",
     blurb: "A fairytale old town nobody you know has been to. Yet.",
-    seed: "ljubljana",
+    imageKeys: ["slovenia/ljubljana"],
     gradient: "linear-gradient(160deg, #A9D6B8 0%, #3E8E5A 55%, #145C6B 100%)",
   },
 ];
@@ -96,14 +97,18 @@ export default function TrendingDestinations() {
               href={`/explore/${dest.slug}`}
               className="flex flex-col overflow-hidden rounded-[20px] border border-[#E7DECB] bg-[#FAF6EF] text-[#22303A] shadow-[0_1px_3px_rgba(34,48,58,0.06)] transition-all duration-200 hover:-translate-y-[3px] hover:shadow-[0_12px_30px_rgba(34,48,58,0.13)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E8A97] focus-visible:ring-offset-2"
             >
-              {/* Photo layered over the design-spec gradient: if the image
-                  fails to load the gradient shows — no broken-image glyph. */}
+              {/* Curated photo over the design-spec gradient; the gradient
+                  is the branded fallback until a photo is selected. */}
               <div
-                className="relative h-[170px]"
-                style={{
-                  background: `url(https://picsum.photos/seed/${dest.seed}/560/340) center / cover no-repeat, ${dest.gradient}`,
-                }}
+                className="relative h-[170px] overflow-hidden"
+                style={{ background: dest.gradient }}
               >
+                <DestinationPhoto
+                  imageKeys={dest.imageKeys}
+                  name={dest.name}
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  plainFallback
+                />
                 <span className="absolute bottom-3 left-3.5 rounded-full bg-[#145C6B]/70 px-[11px] py-[5px] text-xs font-semibold text-[#FDFBF7] backdrop-blur-sm">
                   {dest.badge}
                 </span>

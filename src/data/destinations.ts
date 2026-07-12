@@ -31,7 +31,7 @@ export interface Destination {
   slug: string;
   name: string;
   country: string;
-  /** picsum.photos seed for stable placeholder imagery. */
+  /** Legacy image seed — kept as an images.json lookup alias. */
   imageSeed: string;
   moods: Mood[];
   bestTimeToVisit: string;
@@ -576,11 +576,6 @@ export function getDestination(slug: string): Destination | undefined {
   return DESTINATIONS.find((d) => d.slug === slug);
 }
 
-/** Build the picsum URL for a destination image at a given size. */
-export function destinationImage(
-  seed: string,
-  width: number,
-  height: number
-): string {
-  return `https://picsum.photos/seed/${seed}/${width}/${height}`;
-}
+// Destination photography now lives in src/lib/images.ts (curated Unsplash
+// candidates in src/data/destinations/images.json, rendered through
+// components/images/DestinationPhoto with a branded gradient fallback).

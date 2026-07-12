@@ -15,7 +15,8 @@
     "generate:guides": "node scripts/guides/generate-guide.mjs",
     "verify:guides": "node scripts/guides/verify-guide.mjs",
     "build:guides": "node scripts/guides/build-all.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "images:fetch": "node scripts/images/fetch-destination-images.mjs"
   },
   "repository": {
     "type": "git",

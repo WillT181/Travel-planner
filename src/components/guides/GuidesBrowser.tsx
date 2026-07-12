@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { GuideMeta } from "@/lib/guides";
+import DestinationPhoto from "@/components/images/DestinationPhoto";
 
 interface RegionGroup {
   region: string;
@@ -35,12 +36,11 @@ function GuideCard({ guide }: { guide: GuideMeta }) {
       className="group flex flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm transition-shadow hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
     >
       <div className="relative aspect-[4/3] w-full overflow-hidden bg-neutral-100">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={`https://picsum.photos/seed/${guide.slug}/480/360`}
-          alt={guide.country}
-          loading="lazy"
-          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+        <DestinationPhoto
+          imageKeys={[guide.slug]}
+          name={guide.country}
+          sizes="(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 20vw"
+          className="transition-transform duration-300 group-hover:scale-105"
         />
       </div>
       <div className="flex flex-1 flex-col p-4">

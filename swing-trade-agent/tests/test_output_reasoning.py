@@ -1,4 +1,7 @@
-"""Tests for the reasoning fallback, digest rendering, and price normalisation."""
+"""Tests for digest rendering and price normalisation.
+
+Reasoning-layer tests live in test_reasoning.py.
+"""
 
 from __future__ import annotations
 
@@ -6,11 +9,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from app.config import Config
 from app.output.digest import render_html_digest, render_markdown_digest
 from app.output.models import SignalReport
 from app.prices.provider import PriceProviderError, normalize_ohlcv
-from app.reasoning import build_prompt, explain_signal, fallback_rationale
 from app.signals.models import RuleResult, Signal
 
 
@@ -25,27 +26,6 @@ def _sample_signal() -> Signal:
         atr=2.0,
         as_of="2026-07-24",
     )
-
-
-def test_fallback_rationale_mentions_key_facts():
-    text = fallback_rationale(_sample_signal())
-    assert "AMZN" in text
-    assert "oversold_bounce" in text
-    assert "107.0" in text or "107.00" in text
-    assert "not a trade instruction" in text.lower()
-
-
-def test_explain_signal_uses_fallback_without_api_key():
-    cfg = Config(anthropic_api_key=None)
-    text = explain_signal(_sample_signal(), config=cfg)
-    assert "AMZN" in text  # deterministic fallback, no network
-
-
-def test_build_prompt_contains_only_provided_numbers():
-    prompt = build_prompt(_sample_signal())
-    assert "0.72" in prompt
-    assert "AMZN" in prompt
-    assert "ONLY these numbers" in prompt
 
 
 def test_markdown_digest_ranks_by_score():

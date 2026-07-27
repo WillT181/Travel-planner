@@ -1,17 +1,21 @@
 """Anthropic-backed rationale generation.
 
-The LLM's ONLY job is to translate an already-computed :class:`Signal` into a
-short, readable rationale. It never computes indicators or invents numbers —
-the system prompt makes that explicit, and we only ever pass it the structured
-signal JSON we produced deterministically upstream.
+NARRATION ONLY. This module is the single place an LLM appears in the whole
+system, and its role is strictly to narrate: it converts an already-computed
+:class:`Signal` (the deterministic output of the rules engine) into a short,
+readable rationale. It never computes, infers, or overrides any signal — every
+number it talks about was produced upstream in pure Python. The system prompt
+enforces this, and we only ever hand the model the structured signal JSON.
 
-If no API key is configured (or the SDK isn't installed), we degrade to a
-deterministic template rationale so the pipeline still produces output.
+If no API key is configured (or the SDK isn't installed, or the call fails), we
+degrade to a deterministic template rationale so a failed explanation can never
+crash the pipeline.
 """
 
 from __future__ import annotations
 
 import json
+from typing import Iterable
 
 from app.config import Config, load_config
 from app.signals.models import Signal
@@ -19,25 +23,35 @@ from app.signals.models import Signal
 SYSTEM_PROMPT = (
     "You are a trading-signal explainer for a decision-support tool. You are "
     "given a JSON object of ALREADY-COMPUTED technical indicator values and "
-    "triggered rules for one stock. Your job is ONLY to explain, in plain "
+    "triggered rules for one stock. Your ONLY job is to explain, in plain "
     "English, what these signals mean together.\n\n"
     "Hard rules:\n"
-    "- Reason ONLY from the numbers provided. Never invent prices, dates, "
-    "fundamentals, news, or indicator values that are not in the JSON.\n"
-    "- Do NOT recompute or second-guess the indicators or the composite score.\n"
+    "- Reason ONLY from the numbers provided in the JSON. NEVER invent prices, "
+    "price targets, dates, fundamentals, news, analyst opinions, or indicator "
+    "values that are not present in the input.\n"
+    "- Do NOT recompute, adjust, or second-guess the indicators, the triggered "
+    "rules, or the composite score. Take them as given.\n"
+    "- If the data is thin or a field is missing, say so plainly rather than "
+    "embellishing or padding with generic market commentary.\n"
     "- This is decision support, NOT financial advice, and NOT an instruction "
     "to trade. Never tell the user to buy or sell.\n"
     "- Be concise and specific, citing the actual numbers you were given.\n\n"
-    "Structure your answer as three short labelled parts:\n"
+    "Respond with exactly these three short labelled parts and nothing else "
+    "(no preamble, no exploratory reasoning):\n"
     "1. Setup — what the triggered rules and key levels mean together.\n"
-    "2. Invalidation — the specific condition/level that would negate the "
-    "setup (e.g. a close back below a named level or stop).\n"
+    "2. Invalidation — the specific price action or level that would negate the "
+    "setup (e.g. a daily close back below a named level or the suggested stop).\n"
     "3. Risk note — one sentence on risk, referencing the ATR-based stop "
     "distance as context only."
 )
 
 MAX_TOKENS = 600
-TEMPERATURE = 0.2
+
+# The requested "low temperature" maps to effort=low on claude-opus-4-8: that
+# model rejects the `temperature`/`top_p`/`top_k` sampling parameters (HTTP 400),
+# so determinism/economy is steered via output_config effort plus the tight
+# prompt above rather than a temperature knob.
+EFFORT = "low"
 
 
 class ReasoningError(RuntimeError):
@@ -88,10 +102,11 @@ def explain_signal(
     config: Config | None = None,
     allow_fallback: bool = True,
 ) -> str:
-    """Return a plain-English rationale for a signal.
+    """Return a plain-English rationale for a single signal.
 
-    Uses the Anthropic API when configured; otherwise (or on error, if
-    ``allow_fallback``) returns the deterministic template rationale.
+    Uses the Anthropic API when ``ANTHROPIC_API_KEY`` is configured; otherwise
+    (or on any error, when ``allow_fallback``) returns the deterministic
+    template rationale so the pipeline keeps producing output.
     """
     config = config or load_config()
 
@@ -112,15 +127,46 @@ def explain_signal(
         message = client.messages.create(
             model=config.llm_model,
             max_tokens=MAX_TOKENS,
-            temperature=TEMPERATURE,
             system=SYSTEM_PROMPT,
+            output_config={"effort": EFFORT},
             messages=[{"role": "user", "content": build_prompt(signal)}],
         )
         text = "".join(
-            block.text for block in message.content if getattr(block, "type", "") == "text"
+            block.text
+            for block in message.content
+            if getattr(block, "type", "") == "text"
         ).strip()
         return text or fallback_rationale(signal)
-    except Exception as exc:  # pragma: no cover - network dependent
+    except Exception as exc:  # noqa: BLE001 - a failed explanation must not crash
         if allow_fallback:
             return fallback_rationale(signal)
         raise ReasoningError(f"Anthropic call failed: {exc}") from exc
+
+
+def explain_signals(
+    signals: Iterable[Signal],
+    threshold: float | None = None,
+    config: Config | None = None,
+):
+    """Narrate every signal whose composite score clears ``threshold``.
+
+    Returns a list of ``SignalReport`` (signal + rationale), one per signal
+    above the threshold. ``threshold`` defaults to ``config.signal_threshold``.
+    Signals at or above the threshold are explained; the rest are skipped
+    entirely (no LLM call, no cost).
+    """
+    config = config or load_config()
+    if threshold is None:
+        threshold = config.signal_threshold
+
+    # Imported lazily to keep the reasoning layer importable without the output
+    # layer, and to avoid any import cycle.
+    from app.output.models import SignalReport
+
+    reports = []
+    for signal in signals:
+        if signal.composite_score < threshold:
+            continue
+        rationale = explain_signal(signal, config=config)
+        reports.append(SignalReport(signal=signal, rationale=rationale))
+    return reports

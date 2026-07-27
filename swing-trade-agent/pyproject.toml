@@ -22,7 +22,7 @@ dependencies = [
 # Price data + reasoning + storage. Kept optional so the trust-critical core
 # (indicators / signals / backtest) installs and tests with no network deps.
 prices = ["yfinance>=0.2.40", "pyarrow>=14.0"]
-reasoning = ["anthropic>=0.40"]
+reasoning = ["anthropic>=0.69"]
 output = ["supabase>=2.4"]
 dev = ["pytest>=7.4", "pytest-cov>=4.1"]
 

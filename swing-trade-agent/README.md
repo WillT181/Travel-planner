@@ -37,7 +37,7 @@ computes or infers a number. See [`CLAUDE.md`](CLAUDE.md).
 | `app.indicators` | `add_indicators(df)`: RSI, MACD, SMA/EMA, Bollinger, ATR, volume SMA (pandas-ta-classic) | No |
 | `app.signals` | Rules engine → per-symbol `Signal` (score, levels, stop) | No |
 | `app.backtest` | `run_backtest`: walk-forward, no lookahead → per-rule hit-rate/return vs buy-and-hold, at +5/+10/+20 | No |
-| `app.reasoning` | Claude turns signal JSON → rationale (prose only) | No |
+| `app.reasoning` | Claude narrates signal JSON → rationale (`explain_signal` / threshold-filtered `explain_signals`); prose only, never computes | No |
 | `app.output` | Supabase writer + markdown/HTML digest + email | No |
 
 ## Setup
@@ -127,7 +127,7 @@ malformed frame rather than silently scoring zero.
 ## Tests
 
 ```bash
-python -m pytest            # ~115 tests, no network required (HTTP is mocked)
+python -m pytest            # ~125 tests, no network required (HTTP/LLM mocked)
 python -m pytest --cov=app  # with coverage
 ```
 

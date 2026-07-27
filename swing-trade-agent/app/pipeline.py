@@ -13,7 +13,7 @@ from app.config import Config, load_config
 from app.output.models import SignalReport
 from app.prices import get_price_provider
 from app.prices.provider import PriceProvider
-from app.reasoning import explain_signal
+from app.reasoning import explain_signals
 from app.signals import Signal, signal_from_ohlcv
 
 logger = logging.getLogger("swing_agent")
@@ -78,13 +78,11 @@ def run_pipeline(
     provider = get_price_provider(config, use_cache=use_cache)
     signals = generate_signals(config, resolved, provider)
 
-    flagged = [s for s in signals if s.composite_score >= config.signal_threshold]
-    logger.info("%d of %d symbols crossed threshold", len(flagged), len(signals))
-
-    reports = [
-        SignalReport(signal=s, rationale=explain_signal(s, config=config))
-        for s in flagged
-    ]
+    # Threshold filtering + narration live together in the reasoning layer.
+    reports = explain_signals(
+        signals, threshold=config.signal_threshold, config=config
+    )
+    logger.info("%d of %d symbols crossed threshold", len(reports), len(signals))
 
     if write:
         from app.output import send_digest_email, write_signals

@@ -48,7 +48,10 @@ app/
                        validates input frame (REQUIRED_COLUMNS, >=2 rows)
   backtest/harness.py  run_backtest: walk-forward (NO lookahead) -> per-rule
                        hit-rate/return at +5/+10/+20 vs a buy-and-hold baseline
-  reasoning/claude.py  Claude prose generation (prose only) + deterministic fallback
+  reasoning/claude.py  Claude narration only (explain_signal / explain_signals,
+                       threshold-filtered) + deterministic fallback. Uses
+                       claude-opus-4-8 with output_config effort=low — NO
+                       temperature (that model 400s on sampling params)
   output/              Supabase writer, markdown/HTML digest, Resend email
 tests/                 ~60 pytest tests; synthetic series, no network
 ```

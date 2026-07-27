@@ -13,7 +13,7 @@ yfinance>=0.2.40
 pyarrow>=14.0
 
 # Reasoning (Claude API)
-anthropic>=0.40
+anthropic>=0.69
 
 # Output persistence
 supabase>=2.4

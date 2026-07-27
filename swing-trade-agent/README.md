@@ -11,7 +11,7 @@ one.
 ## How it works
 
 ```
-Trading 212        yfinance         pandas/numpy        rules engine
+Trading 212        yfinance        pandas-ta-classic    rules engine
  positions   ─►   OHLCV history ─►   indicators   ─►   (pure Python)  ─┐
  (read-only)      (cached)          RSI/MACD/…         boolean+score   │
                                                                        ▼
@@ -34,7 +34,7 @@ computes or infers a number. See [`CLAUDE.md`](CLAUDE.md).
 |--------|--------------|---------|
 | `app.portfolio` | Read-only Trading 212 positions → clean symbols | No (GET only) |
 | `app.prices` | Daily OHLCV via a swappable `PriceProvider`, parquet-cached | No |
-| `app.indicators` | RSI, MACD, SMA/EMA, Bollinger, ATR, OBV, volume SMA | No |
+| `app.indicators` | `add_indicators(df)`: RSI, MACD, SMA/EMA, Bollinger, ATR, volume SMA (pandas-ta-classic) | No |
 | `app.signals` | Rules engine → per-symbol `Signal` (score, levels, stop) | No |
 | `app.backtest` | Replays rules over history → hit-rate / forward return | No |
 | `app.reasoning` | Claude turns signal JSON → rationale (prose only) | No |
@@ -49,10 +49,10 @@ pip install -r requirements.txt          # or: pip install -e ".[dev,prices,reas
 cp .env.example .env                      # then fill in a READ-ONLY demo key
 ```
 
-Only `pandas`, `numpy`, `requests`, `python-dotenv` are required for the
-trust-critical core (indicators/signals/backtest) and the tests. The rest
-(`yfinance`, `anthropic`, `supabase`) are needed for live data, reasoning and
-persistence respectively.
+Only `pandas`, `numpy`, `pandas-ta-classic`, `numba`, `requests`,
+`python-dotenv` are required for the trust-critical core
+(indicators/signals/backtest) and the tests. The rest (`yfinance`, `anthropic`,
+`supabase`) are needed for live data, reasoning and persistence respectively.
 
 ## Run against the demo portfolio
 
@@ -114,7 +114,7 @@ malformed frame rather than silently scoring zero.
 ## Tests
 
 ```bash
-python -m pytest            # ~80 tests, no network required
+python -m pytest            # ~88 tests, no network required
 python -m pytest --cov=app  # with coverage
 ```
 

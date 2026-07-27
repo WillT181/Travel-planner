@@ -18,7 +18,7 @@ from statistics import mean, median
 import numpy as np
 import pandas as pd
 
-from app.indicators import compute_indicators
+from app.indicators import add_indicators
 from app.signals.rules import RULES, Rule
 
 
@@ -101,7 +101,7 @@ def backtest_symbol(
     if stats is None:
         stats = {r.__name__: RuleStats(rule=r.__name__, horizon=horizon) for r in rules}
 
-    indicators = compute_indicators(ohlcv)
+    indicators = add_indicators(ohlcv)
     closes = indicators["close"].to_numpy(dtype=float)
     n = len(indicators)
     start = _warmup_index(indicators)

@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from app.indicators import compute_indicators
+from app.indicators import add_indicators
 from app.signals.models import RuleResult, Signal
 from app.signals.rules import RULES
 
@@ -35,7 +35,7 @@ ATR_STOP_MULTIPLE = 2.0
 CONFIRMATION_STEP = 0.05
 CONFIRMATION_CAP = 0.15
 
-# Columns build_signal requires on the indicator frame. compute_indicators
+# Columns build_signal requires on the indicator frame. add_indicators
 # always produces these; build_signal validates so a malformed frame fails
 # loudly at the aggregation boundary rather than silently scoring zero.
 REQUIRED_COLUMNS: frozenset[str] = frozenset(
@@ -166,5 +166,5 @@ def build_signal(symbol: str, indicator_df: pd.DataFrame) -> Signal:
 
 def signal_from_ohlcv(symbol: str, ohlcv: pd.DataFrame) -> Signal:
     """Convenience: compute indicators then build the signal from raw OHLCV."""
-    indicators = compute_indicators(ohlcv)
+    indicators = add_indicators(ohlcv)
     return build_signal(symbol, indicators)

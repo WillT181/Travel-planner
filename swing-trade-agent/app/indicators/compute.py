@@ -1,17 +1,39 @@
-"""Indicator calculations.
+"""Technical indicator calculation via ``pandas-ta-classic``.
 
-Input DataFrames use lowercase OHLCV column names: ``open, high, low, close,
-volume`` indexed by date (ascending). Functions return pandas Series aligned to
-the input index; ``compute_indicators`` returns a copy of the frame with all
-indicator columns appended.
+Single responsibility: take a raw daily OHLCV frame and return a copy with the
+exact indicator columns the signals engine requires appended
+(:data:`INDICATOR_COLUMNS`, which lines up with
+``app.signals.REQUIRED_COLUMNS``). All maths is deterministic — no network, no
+randomness, no hidden state.
+
+Input contract
+--------------
+A ``pandas.DataFrame`` with lowercase columns ``open, high, low, close,
+volume`` indexed by an **ascending** ``DatetimeIndex``.
+
+Guarantees
+----------
+- The input is never mutated; a copy is returned.
+- The row count is unchanged. Leading rows where an indicator is not yet
+  defined hold ``NaN`` (they are **not** dropped) so date alignment — which the
+  backtest depends on — is preserved.
+- Short or empty input is handled gracefully: ``pandas-ta-classic`` returns
+  ``None`` when there aren't enough rows for a window, and we coerce that to an
+  all-``NaN`` column rather than raising.
 """
 
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pandas_ta_classic as ta
 
-# Columns added by compute_indicators (useful for tests / schema checks).
+# Raw OHLCV columns expected on the input frame.
+OHLCV_COLUMNS = ["open", "high", "low", "close", "volume"]
+
+# Indicator columns appended by add_indicators. This set must stay identical to
+# the indicator members of app.signals.REQUIRED_COLUMNS (everything there except
+# the raw ``close``/``volume`` that already exist on the OHLCV frame).
 INDICATOR_COLUMNS = [
     "rsi_14",
     "macd",
@@ -22,177 +44,109 @@ INDICATOR_COLUMNS = [
     "sma_200",
     "ema_20",
     "ema_50",
+    "bb_lower",
     "bb_mid",
     "bb_upper",
-    "bb_lower",
     "atr_14",
-    "obv",
     "vol_sma_20",
 ]
 
-OHLCV_COLUMNS = ["open", "high", "low", "close", "volume"]
 
-
-def _as_series(data: pd.Series | pd.DataFrame, column: str) -> pd.Series:
-    if isinstance(data, pd.DataFrame):
-        return data[column].astype(float)
-    return data.astype(float)
-
-
-def sma(close: pd.Series, length: int) -> pd.Series:
-    """Simple moving average."""
-    return close.astype(float).rolling(window=length, min_periods=length).mean()
-
-
-def ema(close: pd.Series, length: int) -> pd.Series:
-    """Exponential moving average (adjust=False, standard TA convention)."""
-    return close.astype(float).ewm(span=length, adjust=False, min_periods=length).mean()
-
-
-def rsi(close: pd.Series, length: int = 14) -> pd.Series:
-    """Wilder's Relative Strength Index.
-
-    Uses Wilder smoothing (equivalent to an EMA with alpha = 1/length). Returns
-    values in the 0-100 range; the first ``length`` entries are NaN.
-    """
-    close = close.astype(float)
-    delta = close.diff()
-    gain = delta.clip(lower=0.0)
-    loss = -delta.clip(upper=0.0)
-
-    # Wilder's smoothing via ewm(alpha=1/length). min_periods ensures we only
-    # emit values once we have a full seed window.
-    avg_gain = gain.ewm(alpha=1 / length, min_periods=length, adjust=False).mean()
-    avg_loss = loss.ewm(alpha=1 / length, min_periods=length, adjust=False).mean()
-
-    rs = avg_gain / avg_loss
-    rsi_series = 100.0 - (100.0 / (1.0 + rs))
-    # When avg_loss is 0 the market only went up -> RSI 100.
-    rsi_series = rsi_series.where(avg_loss != 0, 100.0)
-    # Preserve NaN during the warmup window.
-    rsi_series[avg_gain.isna()] = np.nan
-    return rsi_series.rename("rsi_14" if length == 14 else f"rsi_{length}")
-
-
-def macd(
-    close: pd.Series,
-    fast: int = 12,
-    slow: int = 26,
-    signal: int = 9,
-) -> pd.DataFrame:
-    """Moving Average Convergence Divergence.
-
-    Returns a DataFrame with columns ``macd``, ``macd_signal``, ``macd_hist``.
-    """
-    close = close.astype(float)
-    ema_fast = close.ewm(span=fast, adjust=False, min_periods=fast).mean()
-    ema_slow = close.ewm(span=slow, adjust=False, min_periods=slow).mean()
-    macd_line = ema_fast - ema_slow
-    signal_line = macd_line.ewm(span=signal, adjust=False, min_periods=signal).mean()
-    hist = macd_line - signal_line
-    return pd.DataFrame(
-        {"macd": macd_line, "macd_signal": signal_line, "macd_hist": hist}
-    )
-
-
-def bollinger_bands(
-    close: pd.Series, length: int = 20, num_std: float = 2.0
-) -> pd.DataFrame:
-    """Bollinger Bands.
-
-    Returns columns ``bb_mid``, ``bb_upper``, ``bb_lower``. Uses a population
-    standard deviation (ddof=0), the standard convention for Bollinger Bands.
-    """
-    close = close.astype(float)
-    mid = close.rolling(window=length, min_periods=length).mean()
-    std = close.rolling(window=length, min_periods=length).std(ddof=0)
-    upper = mid + num_std * std
-    lower = mid - num_std * std
-    return pd.DataFrame({"bb_mid": mid, "bb_upper": upper, "bb_lower": lower})
-
-
-def atr(
-    high: pd.Series,
-    low: pd.Series,
-    close: pd.Series,
-    length: int = 14,
-) -> pd.Series:
-    """Average True Range (Wilder smoothing)."""
-    high = high.astype(float)
-    low = low.astype(float)
-    close = close.astype(float)
-    prev_close = close.shift(1)
-
-    true_range = pd.concat(
-        [
-            high - low,
-            (high - prev_close).abs(),
-            (low - prev_close).abs(),
-        ],
-        axis=1,
-    ).max(axis=1)
-
-    atr_series = true_range.ewm(alpha=1 / length, min_periods=length, adjust=False).mean()
-    return atr_series.rename("atr_14" if length == 14 else f"atr_{length}")
-
-
-def obv(close: pd.Series, volume: pd.Series) -> pd.Series:
-    """On-Balance Volume.
-
-    OBV starts at 0 and adds volume on up-closes, subtracts on down-closes.
-    """
-    close = close.astype(float)
-    volume = volume.astype(float)
-    direction = np.sign(close.diff()).fillna(0.0)
-    obv_series = (direction * volume).cumsum()
-    return obv_series.rename("obv")
-
-
-def compute_indicators(df: pd.DataFrame) -> pd.DataFrame:
-    """Append the full indicator set to an OHLCV frame.
-
-    Parameters
-    ----------
-    df:
-        DataFrame with columns ``open, high, low, close, volume`` indexed by an
-        ascending DatetimeIndex.
-
-    Returns
-    -------
-    A copy of ``df`` with the columns in :data:`INDICATOR_COLUMNS` appended.
-    """
+def _validate_ohlcv(df: pd.DataFrame) -> None:
+    """Defensive input checks (mirrors the validation style of the signals engine)."""
+    if not isinstance(df, pd.DataFrame):
+        raise TypeError("add_indicators expects a pandas DataFrame")
     missing = [c for c in OHLCV_COLUMNS if c not in df.columns]
     if missing:
         raise ValueError(f"OHLCV frame missing columns: {missing}")
     if not df.index.is_monotonic_increasing:
-        raise ValueError("Price frame index must be sorted ascending by date")
+        raise ValueError("price frame index must be sorted ascending by date")
+
+
+def _series(result: pd.Series | None, index: pd.Index) -> pd.Series:
+    """Coerce a pandas-ta result to a Series aligned to ``index``.
+
+    ``pandas-ta-classic`` returns ``None`` when the input is too short for the
+    window; that becomes an all-NaN column so short input never raises.
+    """
+    if result is None:
+        return pd.Series(np.nan, index=index)
+    if isinstance(result, pd.Series):
+        return result.reindex(index)
+    return pd.Series(np.asarray(result, dtype=float), index=index)
+
+
+def _pick(frame: pd.DataFrame | None, prefix: str, index: pd.Index) -> pd.Series:
+    """Select the column of a multi-output pandas-ta frame by name prefix.
+
+    pandas-ta encodes parameters in column names (e.g. ``BBL_20_2.0``,
+    ``MACDs_12_26_9``); we match on the stable prefix so a formatting change in
+    the numeric suffix can't silently misalign a column. Returns NaN if the
+    frame is ``None`` (short input) or the prefix is absent.
+    """
+    if frame is not None:
+        for col in frame.columns:
+            if str(col).startswith(prefix):
+                return frame[col].reindex(index)
+    return pd.Series(np.nan, index=index)
+
+
+def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
+    """Return a copy of ``df`` with :data:`INDICATOR_COLUMNS` appended.
+
+    Parameters
+    ----------
+    df:
+        Raw OHLCV frame (``open, high, low, close, volume``), ascending
+        DatetimeIndex.
+
+    Returns
+    -------
+    pandas.DataFrame
+        A new frame — the input is not mutated — with every required indicator
+        column added. Warmup rows hold ``NaN``; the row count is unchanged.
+    """
+    _validate_ohlcv(df)
 
     out = df.copy()
-    close = _as_series(df, "close")
-    high = _as_series(df, "high")
-    low = _as_series(df, "low")
-    volume = _as_series(df, "volume")
+    index = out.index
+    close = out["close"].astype(float)
+    high = out["high"].astype(float)
+    low = out["low"].astype(float)
+    volume = out["volume"].astype(float)
 
-    out["rsi_14"] = rsi(close, 14)
+    # Momentum
+    out["rsi_14"] = _series(ta.rsi(close, length=14), index)
 
-    macd_df = macd(close, 12, 26, 9)
-    out["macd"] = macd_df["macd"]
-    out["macd_signal"] = macd_df["macd_signal"]
-    out["macd_hist"] = macd_df["macd_hist"]
+    # MACD (12, 26, 9): line / signal / histogram
+    macd = ta.macd(close, fast=12, slow=26, signal=9)
+    out["macd"] = _pick(macd, "MACD_", index)
+    out["macd_signal"] = _pick(macd, "MACDs", index)
+    out["macd_hist"] = _pick(macd, "MACDh", index)
 
-    out["sma_20"] = sma(close, 20)
-    out["sma_50"] = sma(close, 50)
-    out["sma_200"] = sma(close, 200)
-    out["ema_20"] = ema(close, 20)
-    out["ema_50"] = ema(close, 50)
+    # Simple moving averages
+    out["sma_20"] = _series(ta.sma(close, length=20), index)
+    out["sma_50"] = _series(ta.sma(close, length=50), index)
+    out["sma_200"] = _series(ta.sma(close, length=200), index)
 
-    bb = bollinger_bands(close, 20, 2.0)
-    out["bb_mid"] = bb["bb_mid"]
-    out["bb_upper"] = bb["bb_upper"]
-    out["bb_lower"] = bb["bb_lower"]
+    # Exponential moving averages
+    out["ema_20"] = _series(ta.ema(close, length=20), index)
+    out["ema_50"] = _series(ta.ema(close, length=50), index)
 
-    out["atr_14"] = atr(high, low, close, 14)
-    out["obv"] = obv(close, volume)
-    out["vol_sma_20"] = sma(volume, 20)
+    # Bollinger Bands (20, 2): lower / mid / upper
+    bbands = ta.bbands(close, length=20, std=2.0)
+    out["bb_lower"] = _pick(bbands, "BBL", index)
+    out["bb_mid"] = _pick(bbands, "BBM", index)
+    out["bb_upper"] = _pick(bbands, "BBU", index)
+
+    # Volatility
+    out["atr_14"] = _series(ta.atr(high, low, close, length=14), index)
+
+    # Volume
+    out["vol_sma_20"] = _series(ta.sma(volume, length=20), index)
 
     return out
+
+
+# Backward-compatible alias: earlier modules import ``compute_indicators``.
+compute_indicators = add_indicators

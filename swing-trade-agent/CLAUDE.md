@@ -36,7 +36,8 @@ app/
   run.py               CLI: `python -m app.run {run,backtest}`
   portfolio/t212.py    READ-ONLY Trading 212 client + symbol mapping
   prices/              PriceProvider interface, yfinance impl, parquet cache, factory
-  indicators/compute.py  RSI/MACD/SMA/EMA/Bollinger/ATR/OBV/vol-SMA (pure pandas)
+  indicators/compute.py  add_indicators(df): RSI/MACD/SMA/EMA/Bollinger/ATR/
+                       vol-SMA via pandas-ta-classic (deterministic)
   signals/
     models.py          RuleResult, Signal dataclasses (the LLM's only input)
     rules.py           The five swing setups; each returns bool + 0-1 strength
@@ -78,12 +79,17 @@ tests/                 ~60 pytest tests; synthetic series, no network
 
 ## Indicators note
 
-Indicators are implemented in plain pandas/numpy (Wilder smoothing for
-RSI/ATR) rather than depending on `pandas-ta-classic` + `numba`. This keeps the
-trust-critical math fully unit-tested and free of a native build dependency.
-`pandas-ta-classic` may be installed (`pip install .[ta]`) as an independent
-cross-check, but the in-repo functions in `app/indicators/compute.py` remain the
-source of truth.
+Indicators are computed by `pandas-ta-classic` (with `numba`), both **core
+dependencies**. The public entrypoint is `app.indicators.add_indicators(df)`:
+it takes a raw OHLCV frame and returns a copy with exactly the columns in
+`INDICATOR_COLUMNS` appended — which line up with `app.signals.REQUIRED_COLUMNS`.
+`compute_indicators` is kept as a backward-compatible alias for `add_indicators`.
+
+Invariants (enforced by `tests/test_indicators.py`): input is never mutated (a
+copy is returned), the row count is unchanged, warmup rows hold `NaN` rather
+than being dropped (the backtest relies on date alignment), and short/empty
+input yields all-`NaN` columns rather than raising. This is still deterministic
+Python maths — the "no LLM in indicator/signal math" rule is unchanged.
 
 ## Testing
 

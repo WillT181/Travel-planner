@@ -14,15 +14,16 @@ dependencies = [
     "numpy>=1.24",
     "requests>=2.31",
     "python-dotenv>=1.0",
+    "pandas-ta-classic>=0.6",
+    "numba>=0.60",
 ]
 
 [project.optional-dependencies]
 # Price data + reasoning + storage. Kept optional so the trust-critical core
-# (indicators / signals / backtest) installs and tests with zero network deps.
+# (indicators / signals / backtest) installs and tests with no network deps.
 prices = ["yfinance>=0.2.40", "pyarrow>=14.0"]
 reasoning = ["anthropic>=0.40"]
 output = ["supabase>=2.4"]
-ta = ["pandas-ta-classic", "numba"]
 dev = ["pytest>=7.4", "pytest-cov>=4.1"]
 
 [project.scripts]

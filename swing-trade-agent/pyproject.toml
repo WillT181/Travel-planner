@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "swing-trade-agent"
+version = "0.1.0"
+description = "Decision-support tool that flags swing-trading setups in a Trading 212 portfolio with plain-English rationales. Does not place trades."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "requests>=2.31",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+# Price data + reasoning + storage. Kept optional so the trust-critical core
+# (indicators / signals / backtest) installs and tests with zero network deps.
+prices = ["yfinance>=0.2.40", "pyarrow>=14.0"]
+reasoning = ["anthropic>=0.40"]
+output = ["supabase>=2.4"]
+ta = ["pandas-ta-classic", "numba"]
+dev = ["pytest>=7.4", "pytest-cov>=4.1"]
+
+[project.scripts]
+swing-agent = "app.run:main"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"

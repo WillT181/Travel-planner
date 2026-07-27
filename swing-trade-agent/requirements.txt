@@ -1,0 +1,24 @@
+# Core (trust-critical modules run on just these)
+pandas>=2.0
+numpy>=1.24
+requests>=2.31
+python-dotenv>=1.0
+
+# Price data
+yfinance>=0.2.40
+pyarrow>=14.0
+
+# Reasoning (Claude API)
+anthropic>=0.40
+
+# Output persistence
+supabase>=2.4
+
+# Dev / test
+pytest>=7.4
+pytest-cov>=4.1
+
+# Optional: cross-check indicator math against pandas-ta-classic.
+# Requires a working numba build; not needed for the in-repo indicators.
+# pandas-ta-classic
+# numba

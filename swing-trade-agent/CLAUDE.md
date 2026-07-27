@@ -1,0 +1,86 @@
+# Swing Trade Signal Agent — Architecture & Rules for AI Sessions
+
+This document is the contract future sessions must respect when working in
+`swing-trade-agent/`. Read it before changing anything.
+
+## What this is
+
+A **decision-support** tool: it identifies swing-trading setups across a
+Trading 212 portfolio and writes plain-English rationales. It flags setups for a
+human to review. **It does not place trades.**
+
+## Non-negotiable rules
+
+1. **No LLM in the signal math.** All indicator calculations and all signal
+   rules are deterministic Python (`app/indicators`, `app/signals`,
+   `app/backtest`). The Claude API (`app/reasoning`) is used **only** to turn
+   already-computed structured signal data into readable prose. The model must
+   never compute, infer, or adjust a number. The system prompt in
+   `app/reasoning/claude.py` enforces this — do not weaken it.
+2. **No order placement, anywhere.** The Trading 212 client
+   (`app/portfolio/t212.py`) issues **GET requests only**. Never add a code
+   path that POSTs to an order/position endpoint. There is no "place trade"
+   feature and there must never be one.
+3. **Demo + read-only by default.** `T212_BASE_URL` defaults to the demo host
+   and the app expects a read-only key. Do not change the default to a live
+   host.
+4. **Secrets only via env / `.env`.** Never hard-code or commit keys.
+   `.env` is gitignored; `.env.example` documents every variable.
+
+## Module map
+
+```
+app/
+  config.py            Config dataclass loaded from env (.env via python-dotenv)
+  pipeline.py          Wires the stages together (no trading)
+  run.py               CLI: `python -m app.run {run,backtest}`
+  portfolio/t212.py    READ-ONLY Trading 212 client + symbol mapping
+  prices/              PriceProvider interface, yfinance impl, parquet cache, factory
+  indicators/compute.py  RSI/MACD/SMA/EMA/Bollinger/ATR/OBV/vol-SMA (pure pandas)
+  signals/
+    models.py          RuleResult, Signal dataclasses (the LLM's only input)
+    rules.py           The four swing setups; each returns bool + 0-1 strength
+    engine.py          Aggregates rules -> composite score, levels, ATR stop
+  backtest/harness.py  Replays rules over history -> hit-rate / forward return
+  reasoning/claude.py  Claude prose generation (prose only) + deterministic fallback
+  output/              Supabase writer, markdown/HTML digest, Resend email
+tests/                 ~60 pytest tests; synthetic series, no network
+```
+
+## Data contracts
+
+- **OHLCV frame:** lowercase columns `open, high, low, close, volume`, ascending
+  `DatetimeIndex`. `app.prices.normalize_ohlcv` is the single normaliser.
+- **Indicator frame:** OHLCV plus the columns in
+  `app.indicators.INDICATOR_COLUMNS`.
+- **Rule:** `Callable[[pd.DataFrame], RuleResult]` evaluated at the **last row**
+  of the frame (earlier rows only for crossover context). This is what lets the
+  backtest replay a rule by slicing `df.iloc[: i + 1]`.
+- **Signal:** `{symbol, direction, composite_score, triggered_rules[],
+  key_levels{}, suggested_stop, atr, as_of}` — the *only* object handed to the
+  reasoning layer, via `Signal.to_dict()`.
+
+## Adding a rule
+
+1. Write a pure function in `app/signals/rules.py` returning a `RuleResult`
+   (guard for insufficient rows / NaNs; clamp strength to 0–1).
+2. Add it to the `RULES` registry and give it a weight in
+   `engine.RULE_WEIGHTS`.
+3. Add trigger **and** non-trigger unit tests in `tests/test_signals.py` using
+   hand-built indicator frames (see `indicator_frame` in `conftest.py`).
+4. **Backtest it** before trusting it (`python -m app.run backtest`). The
+   backtest exists so rules are validated on history, not vibes.
+
+## Indicators note
+
+Indicators are implemented in plain pandas/numpy (Wilder smoothing for
+RSI/ATR) rather than depending on `pandas-ta-classic` + `numba`. This keeps the
+trust-critical math fully unit-tested and free of a native build dependency.
+`pandas-ta-classic` may be installed (`pip install .[ta]`) as an independent
+cross-check, but the in-repo functions in `app/indicators/compute.py` remain the
+source of truth.
+
+## Testing
+
+`python -m pytest` must stay green and network-free. Every rule needs a
+trigger and a non-trigger test; indicator changes need a numeric assertion.

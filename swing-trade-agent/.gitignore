@@ -1,0 +1,21 @@
+# Secrets
+.env
+.env.*.local
+
+# Price cache
+.cache/
+*.parquet
+
+# Generated digests
+digest.html
+digest.md
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+.venv/
+venv/

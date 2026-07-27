@@ -32,8 +32,8 @@ computes or infers a number. See [`CLAUDE.md`](CLAUDE.md).
 
 | Module | What it does | Trades? |
 |--------|--------------|---------|
-| `app.portfolio` | Read-only Trading 212 positions → clean symbols | No (GET only) |
-| `app.prices` | Daily OHLCV via a swappable `PriceProvider`, parquet-cached | No |
+| `app.portfolio` | Read-only Trading 212 positions (`GET /equity/portfolio`, Basic auth, 429-aware) → clean symbols | No (GET only) |
+| `app.prices` | Daily OHLCV (≥250 days) via a swappable `PriceProvider`, parquet-cached by symbol+date | No |
 | `app.indicators` | `add_indicators(df)`: RSI, MACD, SMA/EMA, Bollinger, ATR, volume SMA (pandas-ta-classic) | No |
 | `app.signals` | Rules engine → per-symbol `Signal` (score, levels, stop) | No |
 | `app.backtest` | `run_backtest`: walk-forward, no lookahead → per-rule hit-rate/return vs buy-and-hold, at +5/+10/+20 | No |
@@ -127,7 +127,7 @@ malformed frame rather than silently scoring zero.
 ## Tests
 
 ```bash
-python -m pytest            # ~95 tests, no network required
+python -m pytest            # ~115 tests, no network required (HTTP is mocked)
 python -m pytest --cov=app  # with coverage
 ```
 

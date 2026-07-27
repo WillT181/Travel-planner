@@ -14,6 +14,10 @@ import pandas as pd
 
 OHLCV_COLUMNS = ["open", "high", "low", "close", "volume"]
 
+# The indicators/signals stack needs a healthy history (SMA200 alone needs 200
+# rows). Providers always request at least this many trading days.
+MIN_TRADING_DAYS = 250
+
 
 class PriceProviderError(RuntimeError):
     """Raised when a provider cannot return usable OHLCV data."""
@@ -97,8 +101,10 @@ class YFinanceProvider(PriceProvider):
                 "yfinance is not installed. `pip install .[prices]`"
             ) from exc
 
-        # Pad the calendar window since ~250 trading days ≈ 365 calendar days.
-        period_days = int(lookback_days * 1.6) + 30
+        # Never request fewer than the minimum useful history, and pad the
+        # calendar window since ~250 trading days ≈ 365 calendar days.
+        trading_days = max(lookback_days, MIN_TRADING_DAYS)
+        period_days = int(trading_days * 1.6) + 30
         try:
             raw = yf.Ticker(symbol).history(
                 period=f"{period_days}d", interval="1d", auto_adjust=False

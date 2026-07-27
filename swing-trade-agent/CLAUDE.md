@@ -34,8 +34,10 @@ app/
   config.py            Config dataclass loaded from env (.env via python-dotenv)
   pipeline.py          Wires the stages together (no trading)
   run.py               CLI: `python -m app.run {run,backtest}`
-  portfolio/t212.py    READ-ONLY Trading 212 client + symbol mapping
-  prices/              PriceProvider interface, yfinance impl, parquet cache, factory
+  portfolio/t212.py    READ-ONLY Trading 212 client (GET /equity/portfolio,
+                       Basic auth, 429 retry/backoff) + symbol mapping
+  prices/              PriceProvider interface, yfinance impl (>=250 days),
+                       parquet cache keyed by symbol+date, factory
   indicators/compute.py  add_indicators(df): RSI/MACD/SMA/EMA/Bollinger/ATR/
                        vol-SMA via pandas-ta-classic (deterministic)
   signals/

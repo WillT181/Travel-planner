@@ -60,6 +60,8 @@ def test_tool_defs_match_registry_and_are_well_formed():
         "get_signal_history",
         "get_recent_changes",
         "get_daily_briefing",
+        "get_news",
+        "get_upcoming_events",
     }
     for t in TOOL_DEFS:
         assert isinstance(t["description"], str) and t["description"]
@@ -234,6 +236,52 @@ def test_get_daily_briefing_dispatches_in_loop():
     assert calls["n"] == 1
     assert "NVDA" in messages[2]["content"][0]["content"]  # organised bundle fed back
     assert reply == "Top of the list: NVDA (new trigger)."
+
+
+def test_get_news_dispatches_in_loop():
+    seen = {}
+
+    def spy(**kw):
+        seen.update(kw)
+        return {"symbol": kw["symbol"], "news": [{"title": "Q2 miss", "source": "Reuters", "date": "2026-07-20"}], "note": ""}
+
+    client = _FakeClient(
+        [
+            _tool_use("n1", "get_news", {"symbol": "AAPL", "days": 5}),
+            _text("Reuters (2026-07-20) reports a Q2 miss, which may relate to the drop."),
+        ]
+    )
+    messages: list = []
+    reply = run_turn(
+        client, messages, "why is AAPL oversold?",
+        tools=[], tool_funcs={"get_news": spy},
+    )
+    assert seen == {"symbol": "AAPL", "days": 5}
+    assert "Q2 miss" in messages[2]["content"][0]["content"]  # headline fed back
+    assert reply.startswith("Reuters")
+
+
+def test_get_upcoming_events_dispatches_in_loop():
+    calls = {"n": 0}
+
+    def spy(**kw):
+        calls["n"] += 1
+        return {"symbol": kw["symbol"], "events": [{"type": "earnings", "date": "2026-08-01", "detail": "earnings"}], "note": ""}
+
+    client = _FakeClient(
+        [
+            _tool_use("e1", "get_upcoming_events", {"symbol": "AAPL"}),
+            _text("AAPL has earnings on 2026-08-01."),
+        ]
+    )
+    messages: list = []
+    reply = run_turn(
+        client, messages, "anything scheduled for AAPL?",
+        tools=[], tool_funcs={"get_upcoming_events": spy},
+    )
+    assert calls["n"] == 1
+    assert "2026-08-01" in messages[2]["content"][0]["content"]
+    assert reply == "AAPL has earnings on 2026-08-01."
 
 
 def test_history_persists_across_turns():

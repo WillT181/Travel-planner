@@ -46,6 +46,14 @@ SYSTEM_PROMPT = (
     "one that has persisted for days — and explain your prioritisation in one "
     "sentence. If the bundle is a quiet day (nothing new, resolved, expired, or "
     "anomalous), say so plainly rather than manufacturing signal.\n"
+    "- CONTEXT: when explaining a flagged setup you MAY proactively call "
+    "`get_news` or `get_upcoming_events` to add factual context (e.g. 'flagging "
+    "oversold; there's a headline about an earnings miss that may explain the "
+    "drop'). Always attribute such context to the tool result — name the source "
+    "and date — never treat a headline as a trade recommendation, and do NOT "
+    "infer causation beyond the data (say a headline 'may relate to' a move, not "
+    "that it 'caused' it). Only mention news/events the tools actually returned; "
+    "if a tool reports no data, say so.\n"
     "- You are SCREENING-ONLY. You do NOT place, modify, or cancel trades, and "
     "you do NOT give financial advice. If asked to trade or for advice on what "
     "to buy/sell, decline and explain that you only screen and explain signals.\n"
@@ -216,6 +224,43 @@ def tool_get_daily_briefing() -> dict:
     return daily_briefing(config=cfg)
 
 
+def tool_get_news(symbol: str, days: int = 7) -> dict:
+    """Recent factual headlines (title/source/date) for a symbol; degrades cleanly."""
+    from app.news import get_news_provider
+
+    cfg, _ = _context()
+    try:
+        headlines = get_news_provider(cfg).get_news(symbol, days=int(days))
+    except Exception:  # noqa: BLE001 - provider down/misconfigured -> no data, not a crash
+        return {"symbol": symbol, "news": [], "note": "No data available (news provider unavailable)."}
+    if not headlines:
+        return {"symbol": symbol, "days": int(days), "news": [], "note": "No recent headlines available."}
+    return {
+        "symbol": symbol,
+        "days": int(days),
+        "news": [{"title": h.title, "source": h.source, "date": h.date} for h in headlines],
+        "note": "",
+    }
+
+
+def tool_get_upcoming_events(symbol: str) -> dict:
+    """Near-term scheduled events (e.g. earnings dates) for a symbol; degrades cleanly."""
+    from app.news import get_news_provider
+
+    cfg, _ = _context()
+    try:
+        events = get_news_provider(cfg).get_upcoming_events(symbol)
+    except Exception:  # noqa: BLE001
+        return {"symbol": symbol, "events": [], "note": "No data available (events provider unavailable)."}
+    if not events:
+        return {"symbol": symbol, "events": [], "note": "No upcoming events available."}
+    return {
+        "symbol": symbol,
+        "events": [{"type": e.type, "date": e.date, "detail": e.detail} for e in events],
+        "note": "",
+    }
+
+
 # Registry: name -> callable. dispatch_tool looks up here so tests can inject.
 TOOL_FUNCS = {
     "get_portfolio": tool_get_portfolio,
@@ -226,6 +271,8 @@ TOOL_FUNCS = {
     "get_signal_history": tool_get_signal_history,
     "get_recent_changes": tool_get_recent_changes,
     "get_daily_briefing": tool_get_daily_briefing,
+    "get_news": tool_get_news,
+    "get_upcoming_events": tool_get_upcoming_events,
 }
 
 # Anthropic tool-use definitions (name / description / JSON input schema).
@@ -328,6 +375,36 @@ TOOL_DEFS = [
             "it into the briefing and decide what matters."
         ),
         "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+    },
+    {
+        "name": "get_news",
+        "description": (
+            "Get recent factual news HEADLINES (title, source, date — not full "
+            "articles) for a symbol, to add context to a setup. Returns a 'note' "
+            "of no-data when the provider is unavailable or has nothing."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "Clean symbol, e.g. AAPL"},
+                "days": {"type": "integer", "description": "Lookback window in days (default 7)"},
+            },
+            "required": ["symbol"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "get_upcoming_events",
+        "description": (
+            "Get near-term scheduled events (e.g. earnings dates) for a symbol, if "
+            "the data provider has them. Returns a 'note' of no-data otherwise."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {"symbol": {"type": "string", "description": "Clean symbol, e.g. AAPL"}},
+            "required": ["symbol"],
+            "additionalProperties": False,
+        },
     },
 ]
 

@@ -40,6 +40,7 @@ computes or infers a number. See [`CLAUDE.md`](CLAUDE.md).
 | `app.reasoning` | Claude narrates signal JSON → rationale (`explain_signal` / threshold-filtered `explain_signals`); prose only, never computes | No |
 | `app.agent` | Interactive REPL: a tool-using Claude agent that wraps the modules as tools (`python -m app.agent`) | No |
 | `app.memory` | Persistent memory over the Supabase `signals` table: a symbol's timeline + run-to-run diff | No |
+| `app.news` | Swappable free-tier news/events provider (Finnhub) for agent context — factual headlines + earnings dates | No |
 | `app.output` | Supabase writer + markdown/HTML digest + email | No |
 
 ## Setup
@@ -119,12 +120,19 @@ three **memory / salience** tools backed by the stored `signals` history —
 setups, resolved/expired setups, and anomalies — plus a `quiet_day` flag). The
 briefing tool returns **organised data, not prose**: the agent ranks it (by
 composite score **and** novelty) and writes the briefing, leading with what
-changed or is unusual and saying plainly when it's a quiet day. The agent
-reasons only from tool output, uses memory for temporal context (e.g. a setup
-persisting for days, a rule that keeps firing and failing), never invents
-numbers, and **declines to trade or give advice** — it is screening-only. A tool error is returned to the
-model as a string, so the loop never crashes. Needs `ANTHROPIC_API_KEY`; type
-`exit` to quit.
+changed or is unusual and saying plainly when it's a quiet day.
+
+It can also pull **external context** to reason like an analyst: `get_news`
+(recent factual headlines — title/source/date, not full articles) and
+`get_upcoming_events` (near-term earnings dates), behind a swappable free-tier
+provider (Finnhub; set `NEWS_API_KEY`, or the tools return "no data"). The agent
+attributes such context to the tool result, never treats a headline as a trade
+recommendation, and won't infer causation beyond the data.
+
+The agent reasons only from tool output, uses memory for temporal context (e.g.
+a setup persisting for days), never invents numbers, and **declines to trade or
+give advice** — it is screening-only. A tool error is returned to the model as a
+string, so the loop never crashes. Needs `ANTHROPIC_API_KEY`; type `exit` to quit.
 
 ## Backtest (build trust before trusting the rules)
 
@@ -184,7 +192,7 @@ malformed frame rather than silently scoring zero.
 ## Tests
 
 ```bash
-python -m pytest            # ~149 tests, no network required (HTTP/LLM mocked)
+python -m pytest            # ~165 tests, no network required (HTTP/LLM mocked)
 python -m pytest --cov=app  # with coverage
 ```
 

@@ -60,6 +60,18 @@ class Config:
         default_factory=lambda: Path(_get("PRICE_CACHE_DIR", str(DEFAULT_CACHE_DIR)))
     )
 
+    # --- News / events provider (agent context; optional, free-tier) ---
+    news_provider: str = field(
+        default_factory=lambda: _get("NEWS_PROVIDER", "finnhub") or "finnhub"
+    )
+    news_api_key: str | None = field(
+        default_factory=lambda: _get("NEWS_API_KEY") or _get("FINNHUB_API_KEY")
+    )
+    news_base_url: str = field(
+        default_factory=lambda: _get("NEWS_BASE_URL", "https://finnhub.io/api/v1")
+        or "https://finnhub.io/api/v1"
+    )
+
     # --- Anthropic (reasoning only) ---
     anthropic_api_key: str | None = field(
         default_factory=lambda: _get("ANTHROPIC_API_KEY")

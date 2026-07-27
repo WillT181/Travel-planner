@@ -50,6 +50,9 @@ app/
                        Basic auth, 429 retry/backoff) + symbol mapping
   prices/              PriceProvider interface, yfinance impl (>=250 days),
                        parquet cache keyed by symbol+date, factory
+  news/                NewsProvider interface + Finnhub free-tier impl + factory
+                       (agent get_news / get_upcoming_events context; factual
+                       data only, key from env, degrades gracefully)
   indicators/compute.py  add_indicators(df): RSI/MACD/SMA/EMA/Bollinger/ATR/
                        vol-SMA via pandas-ta-classic (deterministic)
   signals/

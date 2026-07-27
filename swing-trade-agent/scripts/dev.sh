@@ -35,21 +35,50 @@ if [ ! -d web/node_modules ]; then
   ( cd web && npm install ) || { echo "npm install failed — is Node >= 18.17 installed?" >&2; exit 1; }
 fi
 
-PIDS=()
+# Free a TCP port left held by a previous run that didn't shut down cleanly
+# (common in Codespaces: Ctrl-C kills the launcher but the next/uvicorn worker
+# lingers and keeps the port, so the next start drifts to 3001, 3002, …).
+free_port() {
+  local port="$1" pids=""
+  if command -v lsof >/dev/null 2>&1; then
+    pids=$(lsof -ti "tcp:${port}" 2>/dev/null || true)
+  elif command -v fuser >/dev/null 2>&1; then
+    pids=$(fuser "${port}/tcp" 2>/dev/null || true)
+  fi
+  if [ -n "$pids" ]; then
+    echo "Port ${port} was busy — stopping the leftover process(es) from a previous run."
+    kill $pids 2>/dev/null || true
+    sleep 1
+    kill -9 $pids 2>/dev/null || true
+  fi
+}
+
+free_port "$BACKEND_PORT"
+free_port 3000
+
+# Launch each server in its own process group (setsid) so cleanup can kill the
+# whole group — next dev spawns worker children that a plain kill would orphan.
+RUN_GROUP() { if command -v setsid >/dev/null 2>&1; then setsid "$@"; else "$@"; fi; }
+
+BACK_PID=""
+FRONT_PID=""
 cleanup() {
-  kill "${PIDS[@]}" 2>/dev/null || true
+  for pid in "$FRONT_PID" "$BACK_PID"; do
+    [ -n "$pid" ] || continue
+    kill -- "-${pid}" 2>/dev/null || kill "$pid" 2>/dev/null || true
+  done
   pkill -P $$ 2>/dev/null || true
 }
 trap 'echo; echo "Shutting down…"; cleanup; exit 0' INT TERM
 trap cleanup EXIT
 
 echo "▶ backend  : http://127.0.0.1:${BACKEND_PORT}   (uvicorn --reload)"
-"$PY" -m uvicorn app.web.server:app --reload --port "$BACKEND_PORT" &
-PIDS+=("$!")
+RUN_GROUP "$PY" -m uvicorn app.web.server:app --reload --port "$BACKEND_PORT" &
+BACK_PID=$!
 
 echo "▶ frontend : http://localhost:3000   (next dev)"
-( cd web && exec npm run dev ) &
-PIDS+=("$!")
+RUN_GROUP bash -c 'cd web && exec npm run dev -- -p 3000' &
+FRONT_PID=$!
 
 echo "Both starting — open http://localhost:3000   (Ctrl-C stops both)"
 wait

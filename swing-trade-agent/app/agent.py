@@ -38,6 +38,14 @@ SYSTEM_PROMPT = (
     "setup has persisted several days without resolving, when a rule keeps firing "
     "and failing, or when today differs from recent history. Still reason ONLY "
     "from what the tools return.\n"
+    "- BRIEFINGS: when the user asks for a briefing or 'what's worth looking at "
+    "today', call `get_daily_briefing` and exercise judgment to write it. Lead "
+    "with what CHANGED or is UNUSUAL (new triggers, anomalies, newly-resolved "
+    "setups); then group the routine persisting setups briefly. Rank by a "
+    "combination of composite score AND novelty — a brand-new trigger outranks "
+    "one that has persisted for days — and explain your prioritisation in one "
+    "sentence. If the bundle is a quiet day (nothing new, resolved, expired, or "
+    "anomalous), say so plainly rather than manufacturing signal.\n"
     "- You are SCREENING-ONLY. You do NOT place, modify, or cancel trades, and "
     "you do NOT give financial advice. If asked to trade or for advice on what "
     "to buy/sell, decline and explain that you only screen and explain signals.\n"
@@ -200,6 +208,14 @@ def tool_get_recent_changes() -> dict:
     return diff_runs(config=cfg)
 
 
+def tool_get_daily_briefing() -> dict:
+    """Organised salience bundle for today (new / persisting / resolved / anomalies)."""
+    from app.memory import daily_briefing
+
+    cfg, _ = _context()
+    return daily_briefing(config=cfg)
+
+
 # Registry: name -> callable. dispatch_tool looks up here so tests can inject.
 TOOL_FUNCS = {
     "get_portfolio": tool_get_portfolio,
@@ -209,6 +225,7 @@ TOOL_FUNCS = {
     "run_backtest": tool_run_backtest,
     "get_signal_history": tool_get_signal_history,
     "get_recent_changes": tool_get_recent_changes,
+    "get_daily_briefing": tool_get_daily_briefing,
 }
 
 # Anthropic tool-use definitions (name / description / JSON input schema).
@@ -298,6 +315,17 @@ TOOL_DEFS = [
             "Memory: compare the latest run to the previous one and return what's "
             "new (symbols), newly triggered (symbol+rule), and what stopped "
             "triggering since the last run."
+        ),
+        "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+    },
+    {
+        "name": "get_daily_briefing",
+        "description": (
+            "Salience bundle for today: today's signals organised against the "
+            "previous run into new_triggers, persisting, resolved, expired_symbols, "
+            "and anomalies (unusually high composite score, or 2+ rules "
+            "confirming), plus a quiet_day flag. Returns organised DATA — you turn "
+            "it into the briefing and decide what matters."
         ),
         "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
     },

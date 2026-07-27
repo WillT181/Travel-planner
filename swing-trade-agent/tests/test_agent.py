@@ -59,6 +59,7 @@ def test_tool_defs_match_registry_and_are_well_formed():
         "run_backtest",
         "get_signal_history",
         "get_recent_changes",
+        "get_daily_briefing",
     }
     for t in TOOL_DEFS:
         assert isinstance(t["description"], str) and t["description"]
@@ -210,6 +211,29 @@ def test_get_recent_changes_dispatches_in_loop():
     assert calls["n"] == 1
     assert "NVDA" in messages[2]["content"][0]["content"]  # diff fed back to model
     assert reply == "NVDA is newly flagged vs the previous run."
+
+
+def test_get_daily_briefing_dispatches_in_loop():
+    calls = {"n": 0}
+
+    def spy(**kw):
+        calls["n"] += 1
+        return {"quiet_day": False, "new_triggers": [{"symbol": "NVDA"}], "anomalies": []}
+
+    client = _FakeClient(
+        [
+            _tool_use("t3", "get_daily_briefing", {}),
+            _text("Top of the list: NVDA (new trigger)."),
+        ]
+    )
+    messages: list = []
+    reply = run_turn(
+        client, messages, "what's worth looking at today?",
+        tools=[], tool_funcs={"get_daily_briefing": spy},
+    )
+    assert calls["n"] == 1
+    assert "NVDA" in messages[2]["content"][0]["content"]  # organised bundle fed back
+    assert reply == "Top of the list: NVDA (new trigger)."
 
 
 def test_history_persists_across_turns():

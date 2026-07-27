@@ -112,12 +112,17 @@ agent> ...calls get_portfolio + get_signals, then explains the setups...
 Tools (each a thin wrapper over an existing module, never reimplementing logic):
 `get_portfolio`, `get_signals` (reads the Supabase `signals` table, falls back
 to live evaluation), `explain_signal`, `get_price_history`, `run_backtest`, and
-two **memory** tools backed by the stored `signals` history — `get_signal_history`
-(a symbol's past reports in date order) and `get_recent_changes` (what's new /
-newly triggered / stopped since the previous run). The agent reasons only from
-tool output, uses memory for temporal context (e.g. a setup persisting for days,
-a rule that keeps firing and failing), never invents numbers, and **declines to
-trade or give advice** — it is screening-only. A tool error is returned to the
+three **memory / salience** tools backed by the stored `signals` history —
+`get_signal_history` (a symbol's past reports in date order), `get_recent_changes`
+(what's new / newly triggered / stopped since the previous run), and
+`get_daily_briefing` (today's signals organised into new triggers, persisting
+setups, resolved/expired setups, and anomalies — plus a `quiet_day` flag). The
+briefing tool returns **organised data, not prose**: the agent ranks it (by
+composite score **and** novelty) and writes the briefing, leading with what
+changed or is unusual and saying plainly when it's a quiet day. The agent
+reasons only from tool output, uses memory for temporal context (e.g. a setup
+persisting for days, a rule that keeps firing and failing), never invents
+numbers, and **declines to trade or give advice** — it is screening-only. A tool error is returned to the
 model as a string, so the loop never crashes. Needs `ANTHROPIC_API_KEY`; type
 `exit` to quit.
 
@@ -179,7 +184,7 @@ malformed frame rather than silently scoring zero.
 ## Tests
 
 ```bash
-python -m pytest            # ~144 tests, no network required (HTTP/LLM mocked)
+python -m pytest            # ~149 tests, no network required (HTTP/LLM mocked)
 python -m pytest --cov=app  # with coverage
 ```
 

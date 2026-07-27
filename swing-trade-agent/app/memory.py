@@ -140,3 +140,110 @@ def diff_runs(config: Config | None = None, days: int = 7) -> dict:
         "stopped_triggering": _fmt_pairs(prev_pairs - today_pairs),
         "note": "",
     }
+
+
+# Composite score at/above which a signal is flagged as anomalous.
+HIGH_SCORE = 0.8
+
+
+def _score(row: dict) -> float:
+    try:
+        return float(row.get("composite_score") or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def daily_briefing(
+    config: Config | None = None, days: int = 7, high_score: float = HIGH_SCORE
+) -> dict:
+    """Assemble an ORGANISED salience bundle for the latest run — not prose.
+
+    Categorises the latest run against the previous one and flags anomalies, so
+    the agent can decide what deserves attention. All ranking/judgment stays in
+    the agent; this only supplies structured data:
+
+    - ``new_triggers``   — symbols with at least one rule firing that wasn't in
+                           the previous run (each carries ``new_rules`` and any
+                           ``persisting_rules``).
+    - ``persisting``     — symbols whose rules all carried over from last run.
+    - ``resolved``       — symbol+rule pairs that stopped since last run.
+    - ``expired_symbols``— symbols that dropped out entirely since last run.
+    - ``anomalies``      — unusually high composite score, or 2+ rules confirming.
+    - ``quiet_day``      — True when nothing is new, resolved, expired, or
+                           anomalous (don't manufacture signal).
+    """
+    config = config or load_config()
+    runs = _partition_runs(_fetch_rows(config, since=_since(days)))
+
+    empty = {
+        "run": None,
+        "previous_run": None,
+        "quiet_day": True,
+        "new_triggers": [],
+        "persisting": [],
+        "resolved": [],
+        "expired_symbols": [],
+        "anomalies": [],
+        "counts": {"today_signals": 0, "new_triggers": 0, "persisting": 0,
+                   "resolved": 0, "expired_symbols": 0, "anomalies": 0},
+        "note": "No signals recorded — quiet day.",
+    }
+    if not runs:
+        return empty
+
+    today_ts, today_rows = runs[0]
+    prev_ts, prev_rows = runs[1] if len(runs) > 1 else (None, [])
+    prev_pairs = _pairs(prev_rows)
+    prev_syms = {r.get("symbol") for r in prev_rows}
+    today_syms = {r.get("symbol") for r in today_rows}
+
+    new_triggers, persisting, anomalies = [], [], []
+    for row in today_rows:
+        sym = row.get("symbol")
+        rules = _rules(row)
+        score = round(_score(row), 4)
+        new_rules = [r for r in rules if (sym, r) not in prev_pairs]
+        carried = [r for r in rules if (sym, r) in prev_pairs]
+        entry = {
+            "symbol": sym,
+            "composite_score": score,
+            "triggered_rules": rules,
+            "new_rules": new_rules,
+            "persisting_rules": carried,
+            "suggested_stop": row.get("suggested_stop"),
+            "as_of": row.get("as_of"),
+            "rationale": row.get("rationale"),
+        }
+        (new_triggers if new_rules else persisting).append(entry)
+
+        if score >= high_score:
+            anomalies.append({"symbol": sym, "kind": "high_score", "composite_score": score,
+                              "detail": f"composite score {score:.2f} (>= {high_score:.2f})"})
+        if len(rules) >= 2:
+            anomalies.append({"symbol": sym, "kind": "multi_rule", "composite_score": score,
+                              "detail": f"{len(rules)} rules confirming: {', '.join(rules)}"})
+
+    resolved = _fmt_pairs(prev_pairs - _pairs(today_rows))
+    expired = sorted(s for s in (prev_syms - today_syms) if s)
+    by_score = lambda e: e["composite_score"]  # noqa: E731
+
+    quiet = not (new_triggers or resolved or expired or anomalies)
+    return {
+        "run": today_ts,
+        "previous_run": prev_ts,
+        "quiet_day": quiet,
+        "new_triggers": sorted(new_triggers, key=by_score, reverse=True),
+        "persisting": sorted(persisting, key=by_score, reverse=True),
+        "resolved": resolved,
+        "expired_symbols": expired,
+        "anomalies": anomalies,
+        "counts": {
+            "today_signals": len(today_rows),
+            "new_triggers": len(new_triggers),
+            "persisting": len(persisting),
+            "resolved": len(resolved),
+            "expired_symbols": len(expired),
+            "anomalies": len(anomalies),
+        },
+        "note": "Quiet day — nothing new, resolved, or anomalous." if quiet else "",
+    }

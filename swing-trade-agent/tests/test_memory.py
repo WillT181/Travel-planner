@@ -9,7 +9,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from app.config import Config
-from app.memory import diff_runs, fetch_timeline
+from app.memory import daily_briefing, diff_runs, fetch_timeline
 
 
 class _FakeQuery:
@@ -139,3 +139,83 @@ def test_diff_runs_handles_json_string_rules(monkeypatch):
     _patch(monkeypatch, rows)
     d = diff_runs(config=_CFG)
     assert {"symbol": "AAPL", "rule": "golden_cross_momentum"} in d["newly_triggered"]
+
+
+# --- daily_briefing (salience bundle) --------------------------------------
+
+
+def test_daily_briefing_categorises_new_persisting_resolved_and_anomalies(monkeypatch):
+    rows = [
+        # previous run
+        {"timestamp": "2026-07-01T21:30:00+00:00", "symbol": "AAPL",
+         "composite_score": 0.60, "triggered_rules": ["golden_cross_momentum"]},
+        {"timestamp": "2026-07-01T21:30:00+00:00", "symbol": "MSFT",
+         "composite_score": 0.50, "triggered_rules": ["macd_bullish_crossover"]},
+        # latest run
+        {"timestamp": "2026-07-02T21:30:00+00:00", "symbol": "AAPL",
+         "composite_score": 0.62, "triggered_rules": ["golden_cross_momentum"]},  # persists
+        {"timestamp": "2026-07-02T21:30:00+00:00", "symbol": "NVDA",
+         "composite_score": 0.85, "triggered_rules": ["ema_pullback_resume", "oversold_bounce"]},  # new + anomalous
+    ]
+    _patch(monkeypatch, rows)
+
+    b = daily_briefing(config=_CFG)
+
+    assert b["quiet_day"] is False
+    assert b["run"] == "2026-07-02T21:30:00+00:00"
+    assert b["previous_run"] == "2026-07-01T21:30:00+00:00"
+
+    # NVDA is a new trigger; AAPL persists (its rule carried over).
+    new_syms = {e["symbol"] for e in b["new_triggers"]}
+    persist_syms = {e["symbol"] for e in b["persisting"]}
+    assert new_syms == {"NVDA"}
+    assert persist_syms == {"AAPL"}
+    nvda = b["new_triggers"][0]
+    assert set(nvda["new_rules"]) == {"ema_pullback_resume", "oversold_bounce"}
+
+    # MSFT stopped and dropped out entirely.
+    assert {"symbol": "MSFT", "rule": "macd_bullish_crossover"} in b["resolved"]
+    assert b["expired_symbols"] == ["MSFT"]
+
+    # Anomalies: NVDA's high score AND multi-rule confirmation.
+    kinds = {(a["symbol"], a["kind"]) for a in b["anomalies"]}
+    assert ("NVDA", "high_score") in kinds
+    assert ("NVDA", "multi_rule") in kinds
+    assert b["counts"]["today_signals"] == 2
+
+
+def test_daily_briefing_quiet_day_when_nothing_changes(monkeypatch):
+    rows = [
+        {"timestamp": "2026-07-01T21:30:00+00:00", "symbol": "AAPL",
+         "composite_score": 0.50, "triggered_rules": ["golden_cross_momentum"]},
+        {"timestamp": "2026-07-02T21:30:00+00:00", "symbol": "AAPL",
+         "composite_score": 0.51, "triggered_rules": ["golden_cross_momentum"]},  # same setup, persists
+    ]
+    _patch(monkeypatch, rows)
+
+    b = daily_briefing(config=_CFG)
+
+    assert b["quiet_day"] is True
+    assert b["new_triggers"] == [] and b["resolved"] == [] and b["anomalies"] == []
+    assert {e["symbol"] for e in b["persisting"]} == {"AAPL"}  # routine setup still there
+    assert "Quiet day" in b["note"]
+
+
+def test_daily_briefing_empty_history_is_quiet(monkeypatch):
+    _patch(monkeypatch, [])
+    b = daily_briefing(config=_CFG)
+    assert b["quiet_day"] is True
+    assert b["run"] is None
+    assert b["new_triggers"] == [] and b["persisting"] == [] and b["anomalies"] == []
+
+
+def test_daily_briefing_first_run_marks_all_new(monkeypatch):
+    rows = [
+        {"timestamp": "2026-07-02T21:30:00+00:00", "symbol": "AAPL",
+         "composite_score": 0.7, "triggered_rules": ["golden_cross_momentum"]},
+    ]
+    _patch(monkeypatch, rows)
+    b = daily_briefing(config=_CFG)
+    assert b["previous_run"] is None
+    assert {e["symbol"] for e in b["new_triggers"]} == {"AAPL"}  # nothing prior -> all new
+    assert b["quiet_day"] is False

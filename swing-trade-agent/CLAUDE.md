@@ -37,11 +37,15 @@ app/
   agent.py             Interactive tool-using agent REPL (`python -m app.agent`).
                        Tools are THIN wrappers over the modules; screening-only,
                        never trades. Loop/dispatch are pure testable functions.
-                       Includes memory tools (get_signal_history / get_recent_changes).
+                       Includes memory/salience tools (get_signal_history /
+                       get_recent_changes / get_daily_briefing).
   memory.py            Persistent memory over the Supabase signals table:
-                       fetch_timeline(symbol) + diff_runs() (latest vs previous
-                       run). write_signals stamps one timestamp per run so runs
-                       group cleanly; empty/first-run handled.
+                       fetch_timeline(symbol), diff_runs() (latest vs previous),
+                       and daily_briefing() — an ORGANISED salience bundle (new/
+                       persisting/resolved/expired/anomalies + quiet_day flag).
+                       Judgment/ranking stays in the agent prompt; the assembler
+                       only supplies data. write_signals stamps one timestamp per
+                       run so runs group cleanly; empty/first-run handled.
   portfolio/t212.py    READ-ONLY Trading 212 client (GET /equity/portfolio,
                        Basic auth, 429 retry/backoff) + symbol mapping
   prices/              PriceProvider interface, yfinance impl (>=250 days),

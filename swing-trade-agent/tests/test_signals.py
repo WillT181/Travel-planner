@@ -7,12 +7,20 @@ condition is exercised deterministically (no reliance on indicator warmup).
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 import pytest
 
-from app.signals import build_signal, composite_score, signal_from_ohlcv
+from app.signals import (
+    build_signal,
+    composite_score,
+    confirmation_bonus,
+    evaluate_rules,
+    signal_from_ohlcv,
+)
 from app.signals.models import RuleResult
 from app.signals.rules import (
     bollinger_mean_reversion,
+    ema_pullback_resume,
     golden_cross_momentum,
     macd_bullish_crossover,
     oversold_bounce,
@@ -153,6 +161,51 @@ def test_bollinger_no_trigger_when_still_outside():
     assert not bollinger_mean_reversion(df).triggered
 
 
+# --- ema_pullback_resume ---------------------------------------------------
+
+
+def _ema_frame(rows):
+    return indicator_frame(rows)
+
+
+def test_ema_pullback_resume_triggers():
+    df = _ema_frame(
+        [
+            {"close": 99.0, "ema_20": 100.0, "ema_50": 95.0},  # dip below EMA20
+            {"close": 101.0, "ema_20": 100.0, "ema_50": 96.0},
+            {"close": 102.0, "ema_20": 100.5, "ema_50": 97.0},
+            {"close": 105.0, "ema_20": 101.0, "ema_50": 98.0},  # reclaimed
+        ]
+    )
+    r = ema_pullback_resume(df)
+    assert r.triggered
+    assert 0.5 <= r.strength <= 0.9
+
+
+def test_ema_pullback_no_trigger_without_dip():
+    df = _ema_frame(
+        [
+            {"close": 105.0, "ema_20": 100.0, "ema_50": 95.0},
+            {"close": 106.0, "ema_20": 100.5, "ema_50": 96.0},
+            {"close": 107.0, "ema_20": 101.0, "ema_50": 97.0},
+            {"close": 108.0, "ema_20": 101.5, "ema_50": 98.0},
+        ]
+    )
+    assert not ema_pullback_resume(df).triggered
+
+
+def test_ema_pullback_no_trigger_when_not_uptrend():
+    df = _ema_frame(
+        [
+            {"close": 99.0, "ema_20": 100.0, "ema_50": 105.0},  # ema20 < ema50
+            {"close": 101.0, "ema_20": 100.0, "ema_50": 105.0},
+            {"close": 102.0, "ema_20": 100.5, "ema_50": 104.0},
+            {"close": 106.0, "ema_20": 101.0, "ema_50": 104.0},  # still ema20<ema50
+        ]
+    )
+    assert not ema_pullback_resume(df).triggered
+
+
 # --- insufficient data safety ----------------------------------------------
 
 
@@ -163,6 +216,7 @@ def test_bollinger_no_trigger_when_still_outside():
         golden_cross_momentum,
         macd_bullish_crossover,
         bollinger_mean_reversion,
+        ema_pullback_resume,
     ],
 )
 def test_rules_safe_on_single_row(rule):
@@ -268,3 +322,52 @@ def test_signal_from_ohlcv_end_to_end_runs():
     assert sig.symbol == "SYNTH"
     assert sig.direction in {"long", "neutral"}
     assert 0.0 <= sig.composite_score <= 1.0
+
+
+# --- confirmation bonus & error isolation ----------------------------------
+
+
+@pytest.mark.parametrize(
+    "n,expected",
+    [(0, 0.0), (1, 0.0), (2, 0.05), (3, 0.10), (4, 0.15), (5, 0.15)],
+)
+def test_confirmation_bonus_schedule(n, expected):
+    assert confirmation_bonus(n) == pytest.approx(expected)
+
+
+def test_build_signal_adds_confirmation_bonus_when_multiple_trigger():
+    # This frame trips both oversold_bounce and macd_bullish_crossover.
+    df = indicator_frame(
+        [
+            {
+                "rsi_14": 25.0, "close": 110.0, "sma_50": 105, "sma_200": 100.0,
+                "atr_14": 2.0, "macd": -0.20, "macd_signal": -0.10,
+                "bb_lower": 104, "bb_mid": 108,
+            },
+            {
+                "rsi_14": 33.0, "close": 111.0, "sma_50": 105, "sma_200": 100.0,
+                "atr_14": 2.0, "macd": 0.02, "macd_signal": 0.00,
+                "bb_lower": 104, "bb_mid": 108,
+            },
+        ]
+    )
+    results = evaluate_rules(df)
+    triggered = [r for r in results if r.triggered]
+    assert len(triggered) >= 2
+    sig = build_signal("T", df)
+    expected = min(1.0, composite_score(results) + confirmation_bonus(len(triggered)))
+    assert sig.composite_score == pytest.approx(round(expected, 4))
+    # The bonus strictly raises the score above the pure weighted mean.
+    assert sig.composite_score > composite_score(results)
+
+
+def test_evaluate_rules_isolates_a_raising_rule(monkeypatch):
+    def boom(df):
+        raise ValueError("kaboom")
+
+    boom.__name__ = "boom"
+    monkeypatch.setattr("app.signals.engine.RULES", [boom])
+    results = evaluate_rules(pd.DataFrame({"close": [1.0, 2.0]}))
+    assert len(results) == 1
+    assert results[0].triggered is False
+    assert "error: kaboom" in results[0].detail

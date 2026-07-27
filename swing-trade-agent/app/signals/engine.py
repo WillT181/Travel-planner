@@ -20,6 +20,7 @@ from app.signals.rules import RULES
 # their ratios matter.
 RULE_WEIGHTS: dict[str, float] = {
     "golden_cross_momentum": 1.2,
+    "ema_pullback_resume": 1.1,
     "oversold_bounce": 1.1,
     "macd_bullish_crossover": 1.0,
     "bollinger_mean_reversion": 0.9,
@@ -28,6 +29,11 @@ RULE_WEIGHTS: dict[str, float] = {
 # ATR multiple used to suggest a stop distance FOR CONTEXT ONLY. This is not a
 # trade instruction — it just gives the reader a sense of the setup's risk.
 ATR_STOP_MULTIPLE = 2.0
+
+# Small additive reward when several independent rules confirm the same setup.
+# Capped so it nudges rather than dominates the weighted-mean base score.
+CONFIRMATION_STEP = 0.05
+CONFIRMATION_CAP = 0.15
 
 
 def _num(row: pd.Series, col: str) -> float | None:
@@ -39,8 +45,29 @@ def _num(row: pd.Series, col: str) -> float | None:
 
 
 def evaluate_rules(indicator_df: pd.DataFrame) -> list[RuleResult]:
-    """Run every rule against the frame; return one RuleResult per rule."""
-    return [rule(indicator_df) for rule in RULES]
+    """Run every rule against the frame; return one RuleResult per rule.
+
+    Each rule is isolated: a rule that raises is recorded as a non-triggered
+    result with an error detail rather than aborting the whole evaluation.
+    """
+    results: list[RuleResult] = []
+    for rule in RULES:
+        try:
+            results.append(rule(indicator_df))
+        except Exception as exc:  # noqa: BLE001 - a broken rule must not kill the run
+            results.append(RuleResult(rule.__name__, False, 0.0, f"error: {exc}"))
+    return results
+
+
+def confirmation_bonus(n_triggered: int) -> float:
+    """Additive bonus rewarding multiple independent confirmations.
+
+    Zero for 0 or 1 triggered rules; grows by ``CONFIRMATION_STEP`` per extra
+    rule up to ``CONFIRMATION_CAP``.
+    """
+    if n_triggered <= 1:
+        return 0.0
+    return min(CONFIRMATION_CAP, CONFIRMATION_STEP * (n_triggered - 1))
 
 
 def composite_score(results: list[RuleResult]) -> float:
@@ -81,7 +108,8 @@ def build_signal(symbol: str, indicator_df: pd.DataFrame) -> Signal:
     """Aggregate all rule results for ``symbol`` into a Signal."""
     results = evaluate_rules(indicator_df)
     triggered = [r for r in results if r.triggered]
-    score = composite_score(results)
+    # Weighted-mean base score, nudged up when multiple rules agree.
+    score = min(1.0, composite_score(results) + confirmation_bonus(len(triggered)))
 
     last = indicator_df.iloc[-1] if len(indicator_df) else pd.Series(dtype=float)
     close = _num(last, "close")

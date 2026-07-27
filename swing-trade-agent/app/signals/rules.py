@@ -193,12 +193,57 @@ def bollinger_mean_reversion(df: pd.DataFrame) -> RuleResult:
     )
 
 
+def ema_pullback_resume(df: pd.DataFrame) -> RuleResult:
+    """Trend-pullback continuation: dip to EMA20 then reclaim it in an uptrend.
+
+    In an uptrend (EMA20 > EMA50), price dipped to touch/below the EMA20 in the
+    last few bars and now closes back above it — a "buy the dip" continuation
+    rather than a reversal.
+    """
+    name = "ema_pullback_resume"
+    if not _has_rows(df, 4):
+        return RuleResult(name, False, 0.0, "insufficient history")
+
+    curr = df.iloc[-1]
+    ema20, ema50, close = _val(curr, "ema_20"), _val(curr, "ema_50"), _val(curr, "close")
+    if not _finite(ema20, ema50, close):
+        return RuleResult(name, False, 0.0, "emas not warmed up")
+
+    uptrend = ema20 > ema50
+    reclaimed = close > ema20
+    # A recent dip to/below EMA20 in the prior 3 bars (NaN comparisons are
+    # False, so an un-warmed EMA20 simply doesn't count as a dip).
+    recent = df.iloc[-4:-1]
+    dipped = bool((recent["close"] <= recent["ema_20"]).any())
+
+    triggered = bool(uptrend and reclaimed and dipped)
+    if not triggered:
+        return RuleResult(
+            name,
+            False,
+            0.0,
+            f"uptrend={uptrend}, reclaimed={reclaimed}, dipped={dipped}",
+        )
+
+    # Wider EMA20/EMA50 separation => a more established uptrend backing the dip.
+    sep = (ema20 - ema50) / ema50 if ema50 else 0.0
+    strength = _clamp01(0.5 + 0.4 * _clamp01(sep / 0.05))  # 0.5 .. 0.9
+    return RuleResult(
+        name,
+        True,
+        strength,
+        f"reclaimed EMA20 ({ema20:.2f}) after a pullback; EMA20>EMA50 uptrend "
+        f"(sep {100 * sep:.1f}%)",
+    )
+
+
 # Registry consumed by the engine and the backtest. Order is stable.
 RULES: list[Rule] = [
     oversold_bounce,
     golden_cross_momentum,
     macd_bullish_crossover,
     bollinger_mean_reversion,
+    ema_pullback_resume,
 ]
 
 RULES_BY_NAME: dict[str, Rule] = {r.__name__: r for r in RULES}

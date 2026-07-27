@@ -74,6 +74,7 @@ def test_backtest_rules_end_to_end_over_registry():
         "golden_cross_momentum",
         "macd_bullish_crossover",
         "bollinger_mean_reversion",
+        "ema_pullback_resume",
     }
     for st in result.stats.values():
         assert isinstance(st, RuleStats)

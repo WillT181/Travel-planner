@@ -86,6 +86,7 @@ oversold_bounce                  14     64.3%      1.82%      1.45%
 golden_cross_momentum             3     66.7%      3.10%      2.90%
 macd_bullish_crossover           41     55.0%      0.61%      0.40%
 bollinger_mean_reversion         22     59.1%      0.98%      0.70%
+ema_pullback_resume              18     61.1%      1.20%      0.95%
 ```
 
 (Numbers illustrative.) Forward returns are close-to-close with no costs or
@@ -99,15 +100,19 @@ slippage — treat them as research, not P&L.
 | `golden_cross_momentum` | SMA50 crosses above SMA200 | MA separation + price confirmation |
 | `macd_bullish_crossover` | MACD crosses above signal, **near zero** | proximity to zero (÷ ATR) |
 | `bollinger_mean_reversion` | prior close < lower band, then closes back inside | how far it pierced the band |
+| `ema_pullback_resume` | in an EMA20>EMA50 uptrend, price dipped to EMA20 then reclaimed it | EMA20/EMA50 separation |
 
 Each rule returns a boolean + a 0–1 strength. The engine combines triggered
-rules into a weighted composite score and attaches key levels and an
-ATR-based suggested stop **for context only**.
+rules into a **weighted composite score** (weighted mean of triggered
+strengths) plus a small **confirmation bonus** when several independent rules
+agree, and attaches key levels and an ATR-based suggested stop **for context
+only**. Rules are evaluated in isolation — a rule that raises is recorded as a
+non-trigger with an error note rather than aborting the symbol.
 
 ## Tests
 
 ```bash
-python -m pytest            # ~60 tests, no network required
+python -m pytest            # ~75 tests, no network required
 python -m pytest --cov=app  # with coverage
 ```
 

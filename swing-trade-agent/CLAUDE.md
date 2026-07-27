@@ -39,8 +39,9 @@ app/
   indicators/compute.py  RSI/MACD/SMA/EMA/Bollinger/ATR/OBV/vol-SMA (pure pandas)
   signals/
     models.py          RuleResult, Signal dataclasses (the LLM's only input)
-    rules.py           The four swing setups; each returns bool + 0-1 strength
-    engine.py          Aggregates rules -> composite score, levels, ATR stop
+    rules.py           The five swing setups; each returns bool + 0-1 strength
+    engine.py          Aggregates rules -> composite score (+ confirmation
+                       bonus), levels, ATR stop; isolates raising rules
   backtest/harness.py  Replays rules over history -> hit-rate / forward return
   reasoning/claude.py  Claude prose generation (prose only) + deterministic fallback
   output/              Supabase writer, markdown/HTML digest, Resend email
@@ -55,7 +56,10 @@ tests/                 ~60 pytest tests; synthetic series, no network
   `app.indicators.INDICATOR_COLUMNS`.
 - **Rule:** `Callable[[pd.DataFrame], RuleResult]` evaluated at the **last row**
   of the frame (earlier rows only for crossover context). This is what lets the
-  backtest replay a rule by slicing `df.iloc[: i + 1]`.
+  backtest replay a rule by slicing `df.iloc[: i + 1]`. `engine.evaluate_rules`
+  runs each rule in a try/except so a single broken rule cannot abort the
+  symbol; `engine.confirmation_bonus` adds a small capped reward when multiple
+  rules trigger together.
 - **Signal:** `{symbol, direction, composite_score, triggered_rules[],
   key_levels{}, suggested_stop, atr, as_of}` — the *only* object handed to the
   reasoning layer, via `Signal.to_dict()`.

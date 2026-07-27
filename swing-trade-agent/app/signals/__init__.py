@@ -5,6 +5,7 @@ from app.signals.engine import (
     RULE_WEIGHTS,
     build_signal,
     composite_score,
+    confirmation_bonus,
     evaluate_rules,
     signal_from_ohlcv,
 )
@@ -20,6 +21,7 @@ __all__ = [
     "Signal",
     "build_signal",
     "composite_score",
+    "confirmation_bonus",
     "evaluate_rules",
     "signal_from_ohlcv",
 ]

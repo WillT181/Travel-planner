@@ -24,7 +24,8 @@ dependencies = [
 prices = ["yfinance>=0.2.40", "pyarrow>=14.0"]
 reasoning = ["anthropic>=0.69"]
 output = ["supabase>=2.4"]
-dev = ["pytest>=7.4", "pytest-cov>=4.1"]
+web = ["fastapi>=0.110", "uvicorn>=0.29"]
+dev = ["pytest>=7.4", "pytest-cov>=4.1", "httpx>=0.27"]
 
 [project.scripts]
 swing-agent = "app.run:main"

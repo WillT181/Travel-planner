@@ -134,6 +134,46 @@ a setup persisting for days), never invents numbers, and **declines to trade or
 give advice** — it is screening-only. A tool error is returned to the model as a
 string, so the loop never crashes. Needs `ANTHROPIC_API_KEY`; type `exit` to quit.
 
+## Web chat UI (browser)
+
+A minimal Next.js chat page over the **same** agent loop — the web layer is only
+a front end; it reuses `app.agent.run_turn` verbatim via a thin FastAPI service.
+All secrets stay on the Python server; the browser only ever sees the agent's
+text reply.
+
+```
+browser ──▶ Next.js /api/chat (proxy) ──▶ FastAPI /api/chat ──▶ app.agent.run_turn
+                                            (holds all secrets, runs the tool loop)
+```
+
+Run it locally (against the T212 **demo** environment, same `.env` as the CLI):
+
+```bash
+# 1) Backend — the Python agent service (holds the keys)
+cd swing-trade-agent
+pip install -e ".[web,reasoning,prices,output]"     # or: pip install -r requirements.txt
+uvicorn app.web.server:app --port 8000              # reads .env; needs ANTHROPIC_API_KEY
+
+# 2) Frontend — the chat page (separate terminal)
+cd swing-trade-agent/web
+cp .env.example .env.local                          # AGENT_API_URL=http://127.0.0.1:8000
+npm install && npm run dev                          # http://localhost:3000
+```
+
+The page has a message history, an input box, and a **Daily briefing** button
+(sends the briefing request). Agent replies render as Markdown, so signal tables
+display cleanly. A footer states the boundaries: screening-only, reasons from
+tool data, no trades, no financial advice — the same guardrails enforced in the
+agent's system prompt.
+
+Deploy on Vercel by pointing a project at `swing-trade-agent/web` and setting
+`AGENT_API_URL` to your deployed backend. `AGENT_API_URL` is server-only — it is
+never exposed to the browser, and no API keys ever leave the Python service.
+
+> Responses are returned as a single JSON reply (not token-streamed): the
+> tool-use loop runs to completion server-side, then the answer is sent. The UI
+> shows a "thinking" state meanwhile.
+
 ## Backtest (build trust before trusting the rules)
 
 The backtest walks forward bar by bar. At each bar it evaluates the rules on
@@ -192,7 +232,7 @@ malformed frame rather than silently scoring zero.
 ## Tests
 
 ```bash
-python -m pytest            # ~165 tests, no network required (HTTP/LLM mocked)
+python -m pytest            # ~169 tests, no network required (HTTP/LLM mocked)
 python -m pytest --cov=app  # with coverage
 ```
 

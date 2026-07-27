@@ -38,7 +38,12 @@ app/
                        Tools are THIN wrappers over the modules; screening-only,
                        never trades. Loop/dispatch are pure testable functions.
                        Includes memory/salience tools (get_signal_history /
-                       get_recent_changes / get_daily_briefing).
+                       get_recent_changes / get_daily_briefing) and context
+                       tools (get_news / get_upcoming_events).
+  web/server.py        FastAPI over the agent loop (POST /api/chat). Thin front
+                       end ONLY — reuses run_turn verbatim, holds all secrets
+                       server-side, returns display text. Do not add reasoning
+                       here. (web/ Next.js frontend is the browser client.)
   memory.py            Persistent memory over the Supabase signals table:
                        fetch_timeline(symbol), diff_runs() (latest vs previous),
                        and daily_briefing() — an ORGANISED salience bundle (new/

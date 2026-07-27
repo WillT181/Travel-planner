@@ -2,6 +2,7 @@
 
 from app.signals.engine import (
     ATR_STOP_MULTIPLE,
+    REQUIRED_COLUMNS,
     RULE_WEIGHTS,
     build_signal,
     composite_score,
@@ -14,6 +15,7 @@ from app.signals.rules import RULES, RULES_BY_NAME
 
 __all__ = [
     "ATR_STOP_MULTIPLE",
+    "REQUIRED_COLUMNS",
     "RULE_WEIGHTS",
     "RULES",
     "RULES_BY_NAME",

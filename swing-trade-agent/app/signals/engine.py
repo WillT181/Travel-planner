@@ -35,6 +35,28 @@ ATR_STOP_MULTIPLE = 2.0
 CONFIRMATION_STEP = 0.05
 CONFIRMATION_CAP = 0.15
 
+# Columns build_signal requires on the indicator frame. compute_indicators
+# always produces these; build_signal validates so a malformed frame fails
+# loudly at the aggregation boundary rather than silently scoring zero.
+REQUIRED_COLUMNS: frozenset[str] = frozenset(
+    {
+        "close", "volume", "rsi_14",
+        "macd", "macd_signal", "macd_hist",
+        "sma_20", "sma_50", "sma_200",
+        "ema_20", "ema_50",
+        "bb_lower", "bb_mid", "bb_upper",
+        "atr_14", "vol_sma_20",
+    }
+)
+
+
+def _validate(indicator_df: pd.DataFrame) -> None:
+    missing = REQUIRED_COLUMNS - set(indicator_df.columns)
+    if missing:
+        raise ValueError(f"indicator frame missing required columns: {sorted(missing)}")
+    if len(indicator_df) < 2:
+        raise ValueError("need at least 2 rows of data to evaluate signals")
+
 
 def _num(row: pd.Series, col: str) -> float | None:
     v = row.get(col, np.nan)
@@ -105,7 +127,12 @@ def _key_levels(row: pd.Series) -> dict[str, float]:
 
 
 def build_signal(symbol: str, indicator_df: pd.DataFrame) -> Signal:
-    """Aggregate all rule results for ``symbol`` into a Signal."""
+    """Aggregate all rule results for ``symbol`` into a Signal.
+
+    Raises ``ValueError`` if ``indicator_df`` is missing required columns or has
+    fewer than 2 rows.
+    """
+    _validate(indicator_df)
     results = evaluate_rules(indicator_df)
     triggered = [r for r in results if r.triggered]
     # Weighted-mean base score, nudged up when multiple rules agree.

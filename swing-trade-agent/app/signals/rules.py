@@ -103,16 +103,24 @@ def golden_cross_momentum(df: pd.DataFrame) -> RuleResult:
         return RuleResult(name, False, 0.0, "no SMA50/SMA200 cross")
 
     # Strength: how decisively the fast MA is pulling above the slow MA, plus a
-    # confirmation that price is participating (close above SMA50).
+    # confirmation that price is participating (close above SMA50) and that the
+    # cross came on above-average volume (a more convincing regime change).
     separation = _clamp01((s50_now / s200_now - 1.0) / 0.02)  # full at +2%
     close = _val(curr, "close")
-    confirm = 1.0 if (_finite(close) and close > s50_now) else 0.0
-    strength = _clamp01(0.5 + 0.3 * separation + 0.2 * confirm)
+    price_confirm = 1.0 if (_finite(close) and close > s50_now) else 0.0
+    vol, vol_sma = _val(curr, "volume"), _val(curr, "vol_sma_20")
+    vol_confirm = (
+        1.0 if (_finite(vol, vol_sma) and vol_sma > 0 and vol > vol_sma) else 0.0
+    )
+    strength = _clamp01(
+        0.5 + 0.2 * separation + 0.15 * price_confirm + 0.15 * vol_confirm
+    )
+    vol_note = " on above-average volume" if vol_confirm else ""
     return RuleResult(
         name,
         True,
         strength,
-        f"SMA50 {s50_now:.2f} crossed above SMA200 {s200_now:.2f}",
+        f"SMA50 {s50_now:.2f} crossed above SMA200 {s200_now:.2f}{vol_note}",
     )
 
 
@@ -146,11 +154,12 @@ def macd_bullish_crossover(df: pd.DataFrame) -> RuleResult:
     )
     nearness = _clamp01(1.0 - abs(macd_now) / scale)  # 1 at zero, 0 at >=1 ATR
     strength = _clamp01(0.45 + 0.55 * nearness)
+    where = "below zero" if macd_now <= 0 else "above zero"
     return RuleResult(
         name,
         True,
         strength,
-        f"MACD {macd_now:.3f} crossed above signal {sig_now:.3f} "
+        f"MACD {macd_now:.3f} crossed above signal {sig_now:.3f} {where} "
         f"(|macd|/atr={abs(macd_now) / scale:.2f})",
     )
 
@@ -175,9 +184,21 @@ def bollinger_mean_reversion(df: pd.DataFrame) -> RuleResult:
 
     was_below = close_prev < lower_prev
     back_inside = lower_now <= close_now < mid_now
-    triggered = bool(was_below and back_inside)
+
+    # Trend filter: don't try to catch a falling knife. If SMA50 is clearly
+    # lower than it was ~a week ago, skip the mean-reversion bounce. When there
+    # isn't enough history to judge the trend, we don't veto.
+    trend_ok = True
+    if _has_rows(df, 6):
+        sma50_now = _val(df.iloc[-1], "sma_50")
+        sma50_ref = _val(df.iloc[-6], "sma_50")
+        if _finite(sma50_now, sma50_ref):
+            trend_ok = sma50_now >= sma50_ref
+
+    triggered = bool(was_below and back_inside and trend_ok)
     if not triggered:
-        return RuleResult(name, False, 0.0, "no band re-entry")
+        reason = "no band re-entry" if not (was_below and back_inside) else "SMA50 falling"
+        return RuleResult(name, False, 0.0, reason)
 
     # Strength: how far the prior close pierced below the band (normalised by
     # band width), capped.

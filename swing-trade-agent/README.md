@@ -97,9 +97,9 @@ slippage — treat them as research, not P&L.
 | Rule | Trigger | Strength driver |
 |------|---------|-----------------|
 | `oversold_bounce` | RSI(14) crosses up through 30 **and** close > SMA200 | depth of oversold + trend cushion |
-| `golden_cross_momentum` | SMA50 crosses above SMA200 | MA separation + price confirmation |
+| `golden_cross_momentum` | SMA50 crosses above SMA200 | MA separation + price **and volume** confirmation |
 | `macd_bullish_crossover` | MACD crosses above signal, **near zero** | proximity to zero (÷ ATR) |
-| `bollinger_mean_reversion` | prior close < lower band, then closes back inside | how far it pierced the band |
+| `bollinger_mean_reversion` | prior close < lower band, then closes back inside (**vetoed if SMA50 is falling**) | how far it pierced the band |
 | `ema_pullback_resume` | in an EMA20>EMA50 uptrend, price dipped to EMA20 then reclaimed it | EMA20/EMA50 separation |
 
 Each rule returns a boolean + a 0–1 strength. The engine combines triggered
@@ -107,12 +107,14 @@ rules into a **weighted composite score** (weighted mean of triggered
 strengths) plus a small **confirmation bonus** when several independent rules
 agree, and attaches key levels and an ATR-based suggested stop **for context
 only**. Rules are evaluated in isolation — a rule that raises is recorded as a
-non-trigger with an error note rather than aborting the symbol.
+non-trigger with an error note rather than aborting the symbol. `build_signal`
+validates its input up front (`REQUIRED_COLUMNS`, ≥2 rows) and raises on a
+malformed frame rather than silently scoring zero.
 
 ## Tests
 
 ```bash
-python -m pytest            # ~75 tests, no network required
+python -m pytest            # ~80 tests, no network required
 python -m pytest --cov=app  # with coverage
 ```
 

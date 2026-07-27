@@ -40,8 +40,50 @@ def make_ohlcv(closes, *, volume=None, high_pad=0.5, low_pad=0.5, start="2023-01
 
 
 def indicator_frame(rows: list[dict], start="2023-01-02") -> pd.DataFrame:
-    """Build a small frame of pre-set indicator values for targeted rule tests."""
+    """Build a small frame of pre-set indicator values for targeted rule tests.
+
+    Note: individual *rules* only read the columns they need, so rule-level
+    tests can pass minimal rows. ``build_signal`` validates the full column set
+    (see :func:`full_indicator_frame`).
+    """
     idx = pd.bdate_range(start=start, periods=len(rows))
+    return pd.DataFrame(rows, index=idx)
+
+
+# Inert defaults covering every column build_signal validates. Values are
+# chosen to trigger no rule; tests override the tail to create a condition.
+_INERT_ROW = {
+    "close": 100.0,
+    "volume": 1_000_000.0,
+    "rsi_14": 50.0,
+    "macd": 0.0,
+    "macd_signal": 0.0,
+    "macd_hist": 0.0,
+    "sma_20": 100.0,
+    "sma_50": 100.0,
+    "sma_200": 90.0,  # price above the long-term trend by default
+    "ema_20": 100.0,
+    "ema_50": 100.0,
+    "bb_lower": 95.0,
+    "bb_mid": 100.0,
+    "bb_upper": 105.0,
+    "atr_14": 2.0,
+    "vol_sma_20": 1_000_000.0,
+}
+
+
+def full_indicator_frame(overrides: list[dict] | None = None, n: int = 2,
+                         start="2023-01-02") -> pd.DataFrame:
+    """A frame with every required column present and inert (no rules fire).
+
+    ``overrides`` is a list aligned to the LAST rows: the final dict overrides
+    the last bar, the second-to-last dict the previous bar, etc.
+    """
+    overrides = overrides or []
+    rows = [dict(_INERT_ROW) for _ in range(n)]
+    for offset, patch in enumerate(reversed(overrides), start=1):
+        rows[-offset].update(patch)
+    idx = pd.bdate_range(start=start, periods=n)
     return pd.DataFrame(rows, index=idx)
 
 

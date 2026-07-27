@@ -41,7 +41,8 @@ app/
     models.py          RuleResult, Signal dataclasses (the LLM's only input)
     rules.py           The five swing setups; each returns bool + 0-1 strength
     engine.py          Aggregates rules -> composite score (+ confirmation
-                       bonus), levels, ATR stop; isolates raising rules
+                       bonus), levels, ATR stop; isolates raising rules;
+                       validates input frame (REQUIRED_COLUMNS, >=2 rows)
   backtest/harness.py  Replays rules over history -> hit-rate / forward return
   reasoning/claude.py  Claude prose generation (prose only) + deterministic fallback
   output/              Supabase writer, markdown/HTML digest, Resend email

@@ -25,7 +25,7 @@ from app.signals.rules import (
     macd_bullish_crossover,
     oversold_bounce,
 )
-from tests.conftest import indicator_frame, make_ohlcv
+from tests.conftest import full_indicator_frame, indicator_frame, make_ohlcv
 
 
 # --- oversold_bounce -------------------------------------------------------
@@ -89,6 +89,24 @@ def test_golden_cross_no_trigger_when_already_above():
     assert not golden_cross_momentum(df).triggered
 
 
+def test_golden_cross_volume_boosts_strength():
+    base_rows = [
+        {"sma_50": 99.0, "sma_200": 100.0, "close": 105.0,
+         "volume": 1_000_000.0, "vol_sma_20": 1_000_000.0},
+        {"sma_50": 101.0, "sma_200": 100.0, "close": 105.0,
+         "volume": 1_000_000.0, "vol_sma_20": 1_000_000.0},
+    ]
+    quiet = golden_cross_momentum(indicator_frame(base_rows))
+    loud_rows = [dict(r) for r in base_rows]
+    loud_rows[-1]["volume"] = 2_000_000.0  # above the 20-day volume SMA
+    loud = golden_cross_momentum(indicator_frame(loud_rows))
+
+    assert quiet.triggered and loud.triggered
+    assert loud.strength > quiet.strength  # above-average volume boosts it
+    assert loud.strength >= 0.7
+    assert "above-average volume" in loud.detail
+
+
 # --- macd_bullish_crossover ------------------------------------------------
 
 
@@ -126,6 +144,18 @@ def test_macd_no_trigger_without_cross():
     assert not macd_bullish_crossover(df).triggered
 
 
+def test_macd_detail_notes_below_zero():
+    df = indicator_frame(
+        [
+            {"macd": -0.20, "macd_signal": -0.10, "atr_14": 1.0, "close": 100.0},
+            {"macd": -0.02, "macd_signal": -0.05, "atr_14": 1.0, "close": 100.0},
+        ]
+    )
+    r = macd_bullish_crossover(df)
+    assert r.triggered
+    assert "below zero" in r.detail
+
+
 # --- bollinger_mean_reversion ----------------------------------------------
 
 
@@ -159,6 +189,28 @@ def test_bollinger_no_trigger_when_still_outside():
         ]
     )
     assert not bollinger_mean_reversion(df).triggered
+
+
+def _bollinger_trend_frame(sma50_series: list[float]):
+    """6-bar frame with a band re-entry on the last bar; SMA50 path is given."""
+    rows = [{"close": 100.0, "bb_lower": 95.0, "bb_mid": 100.0, "sma_50": s}
+            for s in sma50_series]
+    rows[-2].update(close=93.0)  # prior bar pierced below the lower band
+    rows[-1].update(close=96.0)  # latest bar back inside
+    return indicator_frame(rows)
+
+
+def test_bollinger_no_trigger_when_sma50_falling():
+    # SMA50 now (100) is well below its value ~a week ago (120) -> falling knife.
+    df = _bollinger_trend_frame([120.0, 115.0, 110.0, 105.0, 102.0, 100.0])
+    assert not bollinger_mean_reversion(df).triggered
+
+
+def test_bollinger_triggers_when_sma50_rising():
+    # Same re-entry, but SMA50 now (100) >= a week ago (90) -> trend filter ok.
+    df = _bollinger_trend_frame([90.0, 92.0, 94.0, 96.0, 98.0, 100.0])
+    r = bollinger_mean_reversion(df)
+    assert r.triggered
 
 
 # --- ema_pullback_resume ---------------------------------------------------
@@ -249,24 +301,7 @@ def test_composite_score_is_weighted_mean():
 
 
 def test_build_signal_neutral_when_no_triggers():
-    df = indicator_frame(
-        [
-            {
-                "rsi_14": 50.0,
-                "close": 100.0,
-                "sma_20": 100,
-                "sma_50": 100,
-                "sma_200": 100,
-                "atr_14": 1.0,
-                "macd": 0.0,
-                "macd_signal": 0.0,
-                "bb_lower": 95,
-                "bb_mid": 100,
-                "bb_upper": 105,
-            }
-        ]
-        * 2
-    )
+    df = full_indicator_frame(n=2)  # all inert -> nothing fires
     sig = build_signal("TEST", df)
     assert sig.direction == "neutral"
     assert sig.composite_score == 0.0
@@ -274,34 +309,12 @@ def test_build_signal_neutral_when_no_triggers():
 
 
 def test_build_signal_sets_stop_and_levels():
-    df = indicator_frame(
-        [
-            {
-                "rsi_14": 25.0,
-                "close": 110.0,
-                "sma_20": 108,
-                "sma_50": 105,
-                "sma_200": 100.0,
-                "atr_14": 2.0,
-                "macd": -0.2,
-                "macd_signal": -0.1,
-                "bb_lower": 104,
-                "bb_mid": 108,
-                "bb_upper": 112,
-            },
-            {
-                "rsi_14": 33.0,
-                "close": 111.0,
-                "sma_20": 108,
-                "sma_50": 105,
-                "sma_200": 100.0,
-                "atr_14": 2.0,
-                "macd": 0.02,
-                "macd_signal": 0.0,
-                "bb_lower": 104,
-                "bb_mid": 108,
-                "bb_upper": 112,
-            },
+    # Overrides trip the oversold bounce (and MACD cross) on the last bar.
+    df = full_indicator_frame(
+        overrides=[
+            {"rsi_14": 25.0, "macd": -0.20, "macd_signal": -0.10, "sma_200": 100.0},
+            {"rsi_14": 33.0, "macd": 0.02, "macd_signal": 0.0,
+             "close": 111.0, "sma_200": 100.0},
         ]
     )
     sig = build_signal("TEST", df)
@@ -337,18 +350,11 @@ def test_confirmation_bonus_schedule(n, expected):
 
 def test_build_signal_adds_confirmation_bonus_when_multiple_trigger():
     # This frame trips both oversold_bounce and macd_bullish_crossover.
-    df = indicator_frame(
-        [
-            {
-                "rsi_14": 25.0, "close": 110.0, "sma_50": 105, "sma_200": 100.0,
-                "atr_14": 2.0, "macd": -0.20, "macd_signal": -0.10,
-                "bb_lower": 104, "bb_mid": 108,
-            },
-            {
-                "rsi_14": 33.0, "close": 111.0, "sma_50": 105, "sma_200": 100.0,
-                "atr_14": 2.0, "macd": 0.02, "macd_signal": 0.00,
-                "bb_lower": 104, "bb_mid": 108,
-            },
+    df = full_indicator_frame(
+        overrides=[
+            {"rsi_14": 25.0, "macd": -0.20, "macd_signal": -0.10, "sma_200": 100.0},
+            {"rsi_14": 33.0, "macd": 0.02, "macd_signal": 0.0,
+             "close": 111.0, "sma_200": 100.0},
         ]
     )
     results = evaluate_rules(df)
@@ -371,3 +377,18 @@ def test_evaluate_rules_isolates_a_raising_rule(monkeypatch):
     assert len(results) == 1
     assert results[0].triggered is False
     assert "error: kaboom" in results[0].detail
+
+
+# --- build_signal input validation -----------------------------------------
+
+
+def test_build_signal_raises_on_missing_columns():
+    df = pd.DataFrame({"close": [1.0, 2.0, 3.0]})
+    with pytest.raises(ValueError):
+        build_signal("TEST", df)
+
+
+def test_build_signal_raises_on_too_few_rows():
+    df = full_indicator_frame(n=1)  # all columns present, but only one row
+    with pytest.raises(ValueError):
+        build_signal("TEST", df)

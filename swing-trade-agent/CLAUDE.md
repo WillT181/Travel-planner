@@ -34,6 +34,9 @@ app/
   config.py            Config dataclass loaded from env (.env via python-dotenv)
   pipeline.py          Wires the stages together (no trading)
   run.py               CLI: `python -m app.run {run,backtest}`
+  agent.py             Interactive tool-using agent REPL (`python -m app.agent`).
+                       Tools are THIN wrappers over the modules; screening-only,
+                       never trades. Loop/dispatch are pure testable functions.
   portfolio/t212.py    READ-ONLY Trading 212 client (GET /equity/portfolio,
                        Basic auth, 429 retry/backoff) + symbol mapping
   prices/              PriceProvider interface, yfinance impl (>=250 days),

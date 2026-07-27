@@ -38,6 +38,7 @@ computes or infers a number. See [`CLAUDE.md`](CLAUDE.md).
 | `app.signals` | Rules engine → per-symbol `Signal` (score, levels, stop) | No |
 | `app.backtest` | `run_backtest`: walk-forward, no lookahead → per-rule hit-rate/return vs buy-and-hold, at +5/+10/+20 | No |
 | `app.reasoning` | Claude narrates signal JSON → rationale (`explain_signal` / threshold-filtered `explain_signals`); prose only, never computes | No |
+| `app.agent` | Interactive REPL: a tool-using Claude agent that wraps the modules as tools (`python -m app.agent`) | No |
 | `app.output` | Supabase writer + markdown/HTML digest + email | No |
 
 ## Setup
@@ -97,6 +98,24 @@ back to a deterministic template rationale, so the pipeline still produces a
 digest. Email delivery is **opt-in**: the digest is emailed via Resend only when
 `RESEND_API_KEY`, `DIGEST_FROM`, and `DIGEST_TO` are all set.
 
+## Chat with the agent
+
+`python -m app.agent` opens a terminal REPL where a tool-using Claude agent
+(`claude-opus-4-8`) can call the pipeline on your behalf:
+
+```
+you> what do I hold, and does anything look interesting today?
+agent> ...calls get_portfolio + get_signals, then explains the setups...
+```
+
+Tools (each a thin wrapper over an existing module, never reimplementing logic):
+`get_portfolio`, `get_signals` (reads the Supabase `signals` table, falls back
+to live evaluation), `explain_signal`, `get_price_history`, `run_backtest`. The
+agent reasons only from tool output, never invents numbers, and **declines to
+trade or give advice** — it is screening-only. A tool error is returned to the
+model as a string, so the loop never crashes. Needs `ANTHROPIC_API_KEY`; type
+`exit` to quit.
+
 ## Backtest (build trust before trusting the rules)
 
 The backtest walks forward bar by bar. At each bar it evaluates the rules on
@@ -155,7 +174,7 @@ malformed frame rather than silently scoring zero.
 ## Tests
 
 ```bash
-python -m pytest            # ~127 tests, no network required (HTTP/LLM mocked)
+python -m pytest            # ~136 tests, no network required (HTTP/LLM mocked)
 python -m pytest --cov=app  # with coverage
 ```
 

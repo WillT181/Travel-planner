@@ -146,7 +146,17 @@ browser ──▶ Next.js /api/chat (proxy) ──▶ FastAPI /api/chat ──�
                                             (holds all secrets, runs the tool loop)
 ```
 
-Run it locally (against the T212 **demo** environment, same `.env` as the CLI):
+**One-command quickstart** (Mac/Linux/WSL — needs Python 3.10+ and Node 18.17+):
+
+```bash
+cd swing-trade-agent
+make setup     # once: creates .venv, installs backend + frontend, writes .env
+#   → then edit .env and add ANTHROPIC_API_KEY
+make dev       # boots backend + frontend together; open http://localhost:3000
+```
+
+`make dev` runs both servers with hot-reload and stops both on Ctrl-C. Or run
+the two halves yourself (any OS):
 
 ```bash
 # 1) Backend — the Python agent service (holds the keys)

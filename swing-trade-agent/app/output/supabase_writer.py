@@ -58,7 +58,14 @@ def write_signals(reports: list[SignalReport], config: Config | None = None) -> 
         return 0
 
     client = create_client(config.supabase_url, config.supabase_service_role_key)
-    rows = [rep.to_row() for rep in reports]
+    # Stamp every row in this run with one timestamp so the memory layer can
+    # group rows into runs and diff consecutive runs (app/memory.py).
+    run_at = dt.datetime.now(dt.timezone.utc).isoformat()
+    rows = []
+    for rep in reports:
+        row = rep.to_row()
+        row["timestamp"] = run_at
+        rows.append(row)
     try:
         client.table("signals").insert(rows).execute()
     except Exception:  # pragma: no cover - network dependent

@@ -57,6 +57,8 @@ def test_tool_defs_match_registry_and_are_well_formed():
         "explain_signal",
         "get_price_history",
         "run_backtest",
+        "get_signal_history",
+        "get_recent_changes",
     }
     for t in TOOL_DEFS:
         assert isinstance(t["description"], str) and t["description"]
@@ -162,6 +164,52 @@ def test_run_turn_survives_tool_error():
     assert reply == "I couldn't fetch that right now."  # loop did not crash
     fed_back = messages[2]["content"][0]["content"]
     assert "Error running get_signals" in fed_back  # error surfaced to the model
+
+
+def test_get_signal_history_dispatches_in_loop():
+    seen = {}
+
+    def spy(**kw):
+        seen.update(kw)
+        return {"symbol": kw["symbol"], "count": 0, "timeline": []}
+
+    client = _FakeClient(
+        [
+            _tool_use("t1", "get_signal_history", {"symbol": "AAPL", "days": 14}),
+            _text("No prior signals for AAPL in that window."),
+        ]
+    )
+    messages: list = []
+    reply = run_turn(
+        client, messages, "how has AAPL evolved?",
+        tools=[], tool_funcs={"get_signal_history": spy},
+    )
+    assert seen == {"symbol": "AAPL", "days": 14}  # right function + args
+    assert reply == "No prior signals for AAPL in that window."
+    assert messages[2]["content"][0]["tool_use_id"] == "t1"  # result fed back
+
+
+def test_get_recent_changes_dispatches_in_loop():
+    calls = {"n": 0}
+
+    def spy(**kw):
+        calls["n"] += 1
+        return {"new_symbols": ["NVDA"], "newly_triggered": [], "stopped_triggering": []}
+
+    client = _FakeClient(
+        [
+            _tool_use("t2", "get_recent_changes", {}),
+            _text("NVDA is newly flagged vs the previous run."),
+        ]
+    )
+    messages: list = []
+    reply = run_turn(
+        client, messages, "what changed today?",
+        tools=[], tool_funcs={"get_recent_changes": spy},
+    )
+    assert calls["n"] == 1
+    assert "NVDA" in messages[2]["content"][0]["content"]  # diff fed back to model
+    assert reply == "NVDA is newly flagged vs the previous run."
 
 
 def test_history_persists_across_turns():

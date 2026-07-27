@@ -39,6 +39,7 @@ computes or infers a number. See [`CLAUDE.md`](CLAUDE.md).
 | `app.backtest` | `run_backtest`: walk-forward, no lookahead → per-rule hit-rate/return vs buy-and-hold, at +5/+10/+20 | No |
 | `app.reasoning` | Claude narrates signal JSON → rationale (`explain_signal` / threshold-filtered `explain_signals`); prose only, never computes | No |
 | `app.agent` | Interactive REPL: a tool-using Claude agent that wraps the modules as tools (`python -m app.agent`) | No |
+| `app.memory` | Persistent memory over the Supabase `signals` table: a symbol's timeline + run-to-run diff | No |
 | `app.output` | Supabase writer + markdown/HTML digest + email | No |
 
 ## Setup
@@ -110,8 +111,12 @@ agent> ...calls get_portfolio + get_signals, then explains the setups...
 
 Tools (each a thin wrapper over an existing module, never reimplementing logic):
 `get_portfolio`, `get_signals` (reads the Supabase `signals` table, falls back
-to live evaluation), `explain_signal`, `get_price_history`, `run_backtest`. The
-agent reasons only from tool output, never invents numbers, and **declines to
+to live evaluation), `explain_signal`, `get_price_history`, `run_backtest`, and
+two **memory** tools backed by the stored `signals` history — `get_signal_history`
+(a symbol's past reports in date order) and `get_recent_changes` (what's new /
+newly triggered / stopped since the previous run). The agent reasons only from
+tool output, uses memory for temporal context (e.g. a setup persisting for days,
+a rule that keeps firing and failing), never invents numbers, and **declines to
 trade or give advice** — it is screening-only. A tool error is returned to the
 model as a string, so the loop never crashes. Needs `ANTHROPIC_API_KEY`; type
 `exit` to quit.
@@ -174,7 +179,7 @@ malformed frame rather than silently scoring zero.
 ## Tests
 
 ```bash
-python -m pytest            # ~136 tests, no network required (HTTP/LLM mocked)
+python -m pytest            # ~144 tests, no network required (HTTP/LLM mocked)
 python -m pytest --cov=app  # with coverage
 ```
 

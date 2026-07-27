@@ -33,6 +33,11 @@ SYSTEM_PROMPT = (
     "returns an error or thin data, say so plainly.\n"
     "- Use the tools to answer questions about holdings, signals, price history, "
     "and backtests; cite the actual numbers the tools give you.\n"
+    "- You have MEMORY of past runs (stored day to day). Use `get_signal_history` "
+    "and `get_recent_changes` to add temporal context — for example, note when a "
+    "setup has persisted several days without resolving, when a rule keeps firing "
+    "and failing, or when today differs from recent history. Still reason ONLY "
+    "from what the tools return.\n"
     "- You are SCREENING-ONLY. You do NOT place, modify, or cancel trades, and "
     "you do NOT give financial advice. If asked to trade or for advice on what "
     "to buy/sell, decline and explain that you only screen and explain signals.\n"
@@ -178,6 +183,23 @@ def tool_run_backtest(rule: str | None = None) -> str:
     return format_report(report)
 
 
+def tool_get_signal_history(symbol: str, days: int = 30) -> dict:
+    """One symbol's past signal reports from memory, oldest first."""
+    from app.memory import fetch_timeline
+
+    cfg, _ = _context()
+    timeline = fetch_timeline(symbol, days=int(days), config=cfg)
+    return {"symbol": symbol, "days": int(days), "count": len(timeline), "timeline": timeline}
+
+
+def tool_get_recent_changes() -> dict:
+    """Diff the latest run vs the previous one (new / newly-triggered / stopped)."""
+    from app.memory import diff_runs
+
+    cfg, _ = _context()
+    return diff_runs(config=cfg)
+
+
 # Registry: name -> callable. dispatch_tool looks up here so tests can inject.
 TOOL_FUNCS = {
     "get_portfolio": tool_get_portfolio,
@@ -185,6 +207,8 @@ TOOL_FUNCS = {
     "explain_signal": tool_explain_signal,
     "get_price_history": tool_get_price_history,
     "run_backtest": tool_run_backtest,
+    "get_signal_history": tool_get_signal_history,
+    "get_recent_changes": tool_get_recent_changes,
 }
 
 # Anthropic tool-use definitions (name / description / JSON input schema).
@@ -250,6 +274,32 @@ TOOL_DEFS = [
             },
             "additionalProperties": False,
         },
+    },
+    {
+        "name": "get_signal_history",
+        "description": (
+            "Memory: get a symbol's PAST signal reports over the last `days` "
+            "(default 30), oldest first, so you can see how a setup has evolved "
+            "over time."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "Clean symbol, e.g. AAPL"},
+                "days": {"type": "integer", "description": "Lookback window in days (default 30)"},
+            },
+            "required": ["symbol"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "get_recent_changes",
+        "description": (
+            "Memory: compare the latest run to the previous one and return what's "
+            "new (symbols), newly triggered (symbol+rule), and what stopped "
+            "triggering since the last run."
+        ),
+        "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
     },
 ]
 

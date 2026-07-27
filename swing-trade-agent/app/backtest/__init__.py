@@ -1,17 +1,19 @@
-"""Backtest harness for validating signal rules against history."""
+"""Walk-forward backtest harness for validating signal rules."""
 
 from app.backtest.harness import (
-    BacktestResult,
-    RuleStats,
-    backtest_rules,
-    backtest_symbol,
-    summarize,
+    DEFAULT_HORIZONS,
+    BacktestReport,
+    HorizonStats,
+    RuleReport,
+    format_report,
+    run_backtest,
 )
 
 __all__ = [
-    "BacktestResult",
-    "RuleStats",
-    "backtest_rules",
-    "backtest_symbol",
-    "summarize",
+    "DEFAULT_HORIZONS",
+    "BacktestReport",
+    "HorizonStats",
+    "RuleReport",
+    "format_report",
+    "run_backtest",
 ]

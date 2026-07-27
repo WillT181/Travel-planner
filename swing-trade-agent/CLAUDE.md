@@ -44,7 +44,8 @@ app/
     engine.py          Aggregates rules -> composite score (+ confirmation
                        bonus), levels, ATR stop; isolates raising rules;
                        validates input frame (REQUIRED_COLUMNS, >=2 rows)
-  backtest/harness.py  Replays rules over history -> hit-rate / forward return
+  backtest/harness.py  run_backtest: walk-forward (NO lookahead) -> per-rule
+                       hit-rate/return at +5/+10/+20 vs a buy-and-hold baseline
   reasoning/claude.py  Claude prose generation (prose only) + deterministic fallback
   output/              Supabase writer, markdown/HTML digest, Resend email
 tests/                 ~60 pytest tests; synthetic series, no network

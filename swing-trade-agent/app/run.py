@@ -49,7 +49,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
 
 
 def _cmd_backtest(args: argparse.Namespace) -> int:
-    from app.backtest import backtest_rules, summarize
+    from app.backtest import format_report, run_backtest
     from app.prices import get_price_provider
 
     config = load_config()
@@ -71,8 +71,8 @@ def _cmd_backtest(args: argparse.Namespace) -> int:
         print("No price data available to backtest.", file=sys.stderr)
         return 1
 
-    result = backtest_rules(price_data, horizon=args.horizon)
-    print(summarize(result))
+    report = run_backtest(price_data, horizons=tuple(args.horizons))
+    print(format_report(report))
     return 0
 
 
@@ -96,7 +96,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_bt = sub.add_parser("backtest", help="backtest the rules over history")
     p_bt.add_argument("--symbols", nargs="*", help="symbols (default: portfolio)")
-    p_bt.add_argument("--horizon", type=int, default=10, help="forward-return days")
+    p_bt.add_argument(
+        "--horizons", type=int, nargs="+", default=[5, 10, 20],
+        help="forward-return windows in trading days",
+    )
     p_bt.add_argument("--history", type=int, default=750, help="lookback days to fetch")
     p_bt.add_argument("--no-cache", action="store_true")
     p_bt.set_defaults(func=_cmd_backtest)

@@ -36,7 +36,7 @@ computes or infers a number. See [`CLAUDE.md`](CLAUDE.md).
 | `app.prices` | Daily OHLCV via a swappable `PriceProvider`, parquet-cached | No |
 | `app.indicators` | `add_indicators(df)`: RSI, MACD, SMA/EMA, Bollinger, ATR, volume SMA (pandas-ta-classic) | No |
 | `app.signals` | Rules engine → per-symbol `Signal` (score, levels, stop) | No |
-| `app.backtest` | Replays rules over history → hit-rate / forward return | No |
+| `app.backtest` | `run_backtest`: walk-forward, no lookahead → per-rule hit-rate/return vs buy-and-hold, at +5/+10/+20 | No |
 | `app.reasoning` | Claude turns signal JSON → rationale (prose only) | No |
 | `app.output` | Supabase writer + markdown/HTML digest + email | No |
 
@@ -71,26 +71,39 @@ digest.
 
 ## Backtest (build trust before trusting the rules)
 
-The backtest replays every rule over history and reports, per rule, how often
-the signal was followed by a positive move `N` trading days later.
+The backtest walks forward bar by bar. At each bar it evaluates the rules on
+**only** the data up to and including that bar (the slice `indicators.iloc[:i+1]`
+— future rows are physically absent, so there is no lookahead), and whenever a
+rule fires it records the forward return of `close` at each horizon (default
++5/+10/+20 trading days), skipping triggers too close to the end to have a full
+window. Per rule it reports trigger count, hit-rate, and mean/median forward
+return at each horizon — plus a **buy-and-hold baseline** over the identical set
+of entry bars, so you can see whether a rule actually beats just holding.
 
 ```bash
-python -m app.run backtest --symbols AAPL MSFT NVDA AMZN GOOG --horizon 10 --history 750
+python -m app.run backtest --symbols AAPL MSFT NVDA AMZN GOOG --horizons 5 10 20 --history 750
 ```
 
 ```
-Backtest — horizon 10 trading days, 5 symbol(s)
-rule                        signals  hit_rate   avg_ret    median
------------------------------------------------------------------
-oversold_bounce                  14     64.3%      1.82%      1.45%
-golden_cross_momentum             3     66.7%      3.10%      2.90%
-macd_bullish_crossover           41     55.0%      0.61%      0.40%
-bollinger_mean_reversion         22     59.1%      0.98%      0.70%
-ema_pullback_resume              18     61.1%      1.20%      0.95%
+Backtest — 5 symbol(s): AAPL, AMZN, GOOG, MSFT, NVDA
+Horizons (trading days): 5, 10, 20
+(forward returns are close-to-close, no costs; decision support only)
+
+rule                      trig    +5 hit     mean      med   +10 hit     mean      med   +20 hit     mean      med
+------------------------------------------------------------------------------------------------------------------
+golden_cross_momentum        4    100.0%    2.9%     2.9%     100.0%    5.8%     5.8%     100.0%   11.7%   11.7%
+oversold_bounce             14     64.3%    1.8%     1.5%      61.0%    2.1%     1.7%      57.0%    2.4%    1.9%
+...
+------------------------------------------------------------------------------------------------------------------
+buy_and_hold (baseline)    947     37.2%   -0.2%     0.0%      35.9%   -0.3%     0.0%      33.4%   -0.5%    0.0%
 ```
 
-(Numbers illustrative.) Forward returns are close-to-close with no costs or
+(Numbers illustrative.) A rule earns its keep only if it clears the
+`buy_and_hold` row. Forward returns are close-to-close with no costs or
 slippage — treat them as research, not P&L.
+
+Programmatically: `run_backtest(price_data, horizons=(5, 10, 20)) ->
+BacktestReport` (and `format_report(report)` for the table above).
 
 ## The rules
 
@@ -114,7 +127,7 @@ malformed frame rather than silently scoring zero.
 ## Tests
 
 ```bash
-python -m pytest            # ~88 tests, no network required
+python -m pytest            # ~95 tests, no network required
 python -m pytest --cov=app  # with coverage
 ```
 

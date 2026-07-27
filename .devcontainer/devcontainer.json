@@ -1,0 +1,16 @@
+{
+  "name": "Swing Trade Signal Agent",
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "workspaceFolder": "/workspaces/Travel-planner/swing-trade-agent",
+  "postCreateCommand": "bash -lc 'cd swing-trade-agent && cp -n .env.example .env || true && pip install -e \".[web,reasoning,prices,output,dev]\" && cd web && npm install'",
+  "forwardPorts": [3000, 8000],
+  "portsAttributes": {
+    "3000": { "label": "Chat UI", "onAutoForward": "openBrowser" },
+    "8000": { "label": "Agent API", "onAutoForward": "silent" }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-python.python"]
+    }
+  }
+}

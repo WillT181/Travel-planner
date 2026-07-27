@@ -76,15 +76,22 @@ def _cmd_backtest(args: argparse.Namespace) -> int:
     return 0
 
 
+SUBCOMMANDS = {"run", "backtest"}
+
+
 def build_parser() -> argparse.ArgumentParser:
+    # -v/--verbose is shared by both subcommands via a parent parser so it works
+    # in any position (including the default-to-run path below).
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("-v", "--verbose", action="store_true")
+
     parser = argparse.ArgumentParser(
         prog="swing-agent",
         description="Swing-trade signal decision-support tool (does not trade).",
     )
-    parser.add_argument("-v", "--verbose", action="store_true")
     sub = parser.add_subparsers(dest="command")
 
-    p_run = sub.add_parser("run", help="run the daily signal pipeline")
+    p_run = sub.add_parser("run", parents=[common], help="run the daily signal pipeline")
     p_run.add_argument("--symbols", nargs="*", help="override portfolio symbols")
     p_run.add_argument("--html", action="store_true", help="emit HTML instead of markdown")
     p_run.add_argument("--out", help="write digest to a file instead of stdout")
@@ -94,7 +101,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_run.set_defaults(func=_cmd_run)
 
-    p_bt = sub.add_parser("backtest", help="backtest the rules over history")
+    p_bt = sub.add_parser("backtest", parents=[common], help="backtest the rules over history")
     p_bt.add_argument("--symbols", nargs="*", help="symbols (default: portfolio)")
     p_bt.add_argument(
         "--horizons", type=int, nargs="+", default=[5, 10, 20],
@@ -108,14 +115,15 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:]) if argv is None else list(argv)
+    # `python -m app.run` (and `... --out x`) default to the `run` subcommand,
+    # so scheduled runs need no explicit subcommand. Help still works.
+    if not argv or (argv[0] not in SUBCOMMANDS and argv[0] not in ("-h", "--help")):
+        argv = ["run", *argv]
+
     parser = build_parser()
     args = parser.parse_args(argv)
     _setup_logging(getattr(args, "verbose", False))
-
-    if not getattr(args, "command", None):
-        # Default to the pipeline run for the scheduled/`python -m app.run` case.
-        args = parser.parse_args(["run", *(argv or [])])
-        _setup_logging(args.verbose)
     return args.func(args)
 
 

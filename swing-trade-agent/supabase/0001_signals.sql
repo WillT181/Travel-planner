@@ -5,23 +5,21 @@
 
 create table if not exists public.signals (
     id             bigint generated always as identity primary key,
-    generated_at   timestamptz not null default now(),
-    as_of          date,
+    "timestamp"    timestamptz not null default now(),  -- run time (UTC)
+    as_of          date,                                -- date of the evaluated bar
     symbol         text        not null,
-    direction      text        not null check (direction in ('long', 'neutral', 'short')),
-    score          double precision not null,
-    rules          text[]      not null default '{}',
-    key_levels     jsonb       not null default '{}'::jsonb,
-    suggested_stop double precision,
-    atr            double precision,
+    composite_score double precision not null,
+    triggered_rules jsonb      not null default '[]'::jsonb,   -- array of rule names
+    key_levels     jsonb       not null default '{}'::jsonb,   -- {close, sma_50, ...}
+    suggested_stop double precision,                    -- ATR-based, context only
     rationale      text
 );
 
-create index if not exists signals_symbol_generated_idx
-    on public.signals (symbol, generated_at desc);
+create index if not exists signals_symbol_ts_idx
+    on public.signals (symbol, "timestamp" desc);
 
-create index if not exists signals_generated_idx
-    on public.signals (generated_at desc);
+create index if not exists signals_ts_idx
+    on public.signals ("timestamp" desc);
 
 -- Enable RLS. The service-role key used by the pipeline bypasses RLS, so no
 -- policy is required for the writer. Add SELECT policies here if you later

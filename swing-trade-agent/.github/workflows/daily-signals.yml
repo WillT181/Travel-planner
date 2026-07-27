@@ -1,11 +1,10 @@
 name: Daily Swing Signals
 
-# Runs once daily after the US market close. Regular US close is 20:00 UTC
-# (16:00 ET); 22:30 UTC leaves a comfortable margin year-round (DST + late
-# data settling). Adjust as needed.
+# Runs each weekday after the US market close. Regular US close is 20:00 UTC
+# (16:00 ET); 21:30 UTC leaves margin for late data settling. Adjust as needed.
 on:
   schedule:
-    - cron: "30 22 * * 1-5" # Mon-Fri, 22:30 UTC
+    - cron: "30 21 * * 1-5" # Mon-Fri, 21:30 UTC
   workflow_dispatch: {} # allow manual runs
 
 # The pipeline is read-only and never places trades.
@@ -44,12 +43,12 @@ jobs:
           DIGEST_FROM: ${{ secrets.DIGEST_FROM }}
           DIGEST_TO: ${{ secrets.DIGEST_TO }}
           SIGNAL_THRESHOLD: ${{ vars.SIGNAL_THRESHOLD }}
-        run: python -m app.run run --html --out digest.html
+        run: python -m app.run --out digest.md
 
       - name: Upload digest artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: swing-signal-digest
-          path: swing-trade-agent/digest.html
+          path: swing-trade-agent/digest.md
           if-no-files-found: ignore

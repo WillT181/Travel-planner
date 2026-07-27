@@ -35,18 +35,26 @@ def generate_signals(
     symbols: list[str],
     provider: PriceProvider,
 ) -> list[Signal]:
-    """Fetch prices and compute a Signal per symbol."""
+    """Fetch prices and compute a Signal per symbol.
+
+    Resilient: any failure on one symbol (price fetch, indicator computation,
+    signal build) is logged and skipped so it can never abort the whole run.
+    """
     signals: list[Signal] = []
     for sym in symbols:
         try:
             ohlcv = provider.get_history(sym, lookback_days=config.history_days)
-        except Exception as exc:
-            logger.warning("skipping %s: price fetch failed: %s", sym, exc)
+            if len(ohlcv) < 210:
+                logger.warning(
+                    "skipping %s: only %d rows (<210 needed for SMA200)", sym, len(ohlcv)
+                )
+                continue
+            signal = signal_from_ohlcv(sym, ohlcv)
+            signals.append(signal)
+            logger.debug("evaluated %s: score=%.2f", sym, signal.composite_score)
+        except Exception as exc:  # noqa: BLE001 - one bad symbol must not abort the run
+            logger.warning("skipping %s: %s", sym, exc)
             continue
-        if len(ohlcv) < 210:
-            logger.warning("skipping %s: only %d rows (<210)", sym, len(ohlcv))
-            continue
-        signals.append(signal_from_ohlcv(sym, ohlcv))
     return signals
 
 
@@ -67,30 +75,43 @@ def run_pipeline(
     """
     config = config or load_config()
     logger.info(
-        "starting pipeline (env=%s, threshold=%.2f)",
+        "=== Swing Trade Signal Agent — pipeline start (env=%s, threshold=%.2f) ===",
         "DEMO" if config.is_demo else "LIVE-READONLY",
         config.signal_threshold,
     )
 
+    # Stage 1 — portfolio.
     resolved = _get_symbols(config, symbols)
-    logger.info("evaluating %d symbol(s)", len(resolved))
+    source = "explicit list" if symbols else "Trading 212 portfolio"
+    logger.info(
+        "[1/4] Portfolio (%s): %d symbol(s) — %s",
+        source,
+        len(resolved),
+        ", ".join(resolved) or "(none)",
+    )
 
+    # Stage 2 — prices -> indicators -> signals (per-symbol resilient).
+    logger.info("[2/4] Prices + indicators + signals: processing %d symbol(s)", len(resolved))
     provider = get_price_provider(config, use_cache=use_cache)
     signals = generate_signals(config, resolved, provider)
+    logger.info("[2/4] Signals: computed %d of %d symbol(s)", len(signals), len(resolved))
 
-    # Threshold filtering + narration live together in the reasoning layer.
-    reports = explain_signals(
-        signals, threshold=config.signal_threshold, config=config
-    )
-    logger.info("%d of %d symbols crossed threshold", len(reports), len(signals))
+    # Stage 3 — reasoning (threshold filter + narration).
+    logger.info("[3/4] Reasoning: narrating signals >= %.2f", config.signal_threshold)
+    reports = explain_signals(signals, threshold=config.signal_threshold, config=config)
+    logger.info("[3/4] Reasoning: %d of %d crossed threshold", len(reports), len(signals))
 
+    # Stage 4 — output (Supabase + optional email; both no-op when unconfigured).
+    logger.info("[4/4] Output: persisting results")
     if write:
         from app.output import send_digest_email, write_signals
 
         written = write_signals(reports, config=config)
-        if written:
-            logger.info("wrote %d rows to Supabase", written)
+        logger.info("[4/4] Supabase: wrote %d row(s)", written)
         if send_digest_email(reports, config=config):
-            logger.info("digest email sent")
+            logger.info("[4/4] Email: digest sent via Resend")
+    else:
+        logger.info("[4/4] Output: skipped (dry run)")
 
+    logger.info("=== pipeline complete: %d setup(s) flagged ===", len(reports))
     return reports

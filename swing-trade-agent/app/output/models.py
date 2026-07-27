@@ -19,16 +19,18 @@ class SignalReport:
     )
 
     def to_row(self) -> dict:
-        """Flatten to the Supabase ``signals`` table row shape."""
+        """Flatten to the Supabase ``signals`` table row shape.
+
+        Column names match ``supabase/0001_signals.sql``: ``triggered_rules``
+        and ``key_levels`` land in JSONB columns.
+        """
         return {
-            "generated_at": self.generated_at,
+            "timestamp": self.generated_at,
             "as_of": self.signal.as_of,
             "symbol": self.signal.symbol,
-            "direction": self.signal.direction,
-            "score": self.signal.composite_score,
-            "rules": self.signal.triggered_rule_names,
+            "composite_score": self.signal.composite_score,
+            "triggered_rules": self.signal.triggered_rule_names,
             "key_levels": self.signal.key_levels,
             "suggested_stop": self.signal.suggested_stop,
-            "atr": self.signal.atr,
             "rationale": self.rationale,
         }

@@ -54,20 +54,48 @@ Only `pandas`, `numpy`, `pandas-ta-classic`, `numba`, `requests`,
 (indicators/signals/backtest) and the tests. The rest (`yfinance`, `anthropic`,
 `supabase`) are needed for live data, reasoning and persistence respectively.
 
-## Run against the demo portfolio
+Fill in `.env` — every variable is listed in `.env.example`. The only one
+required to run against demo is a **read-only** `T212_API_KEY`; everything else
+(Anthropic, Supabase, Resend) is optional and the pipeline degrades gracefully
+when it's unset.
+
+### Optional: Supabase persistence
+
+To store each run's signals, create the table once, then set `SUPABASE_URL` +
+`SUPABASE_SERVICE_ROLE_KEY`:
 
 ```bash
-# Full pipeline: portfolio → signals → rationale → digest (stdout markdown)
-python -m app.run run
+# Run supabase/0001_signals.sql in the Supabase SQL editor (or via the CLI).
+# Columns: timestamp, symbol, as_of, composite_score, triggered_rules (jsonb),
+#          key_levels (jsonb), suggested_stop, rationale.
+```
 
-# Explicit symbols (no T212 needed), HTML to a file, don't write to Supabase
-python -m app.run run --symbols AAPL MSFT NVDA --html --out digest.html --dry-run
+If Supabase isn't configured the writer is a no-op (returns 0) — the run still
+prints/writes the digest.
+
+## Run against the demo portfolio
+
+`python -m app.run` runs the full pipeline in order: **fetch portfolio → fetch
+prices → add indicators → evaluate signals → reason over above-threshold
+signals → write output**, logging each stage. A failure on one symbol is logged
+and skipped, never aborting the run.
+
+```bash
+# Full pipeline: T212 demo portfolio → signals → rationale → markdown digest
+python -m app.run                       # (the `run` subcommand is the default)
+
+# Write the digest to a file
+python -m app.run --out digest.md
+
+# Explicit symbols (no T212 call), dry run (no Supabase write / no email), HTML
+python -m app.run --symbols AAPL MSFT NVDA --dry-run --html --out digest.html
 ```
 
 Configuration is entirely via environment variables / `.env`
 (see `.env.example`). With no `ANTHROPIC_API_KEY`, the reasoning layer falls
 back to a deterministic template rationale, so the pipeline still produces a
-digest.
+digest. Email delivery is **opt-in**: the digest is emailed via Resend only when
+`RESEND_API_KEY`, `DIGEST_FROM`, and `DIGEST_TO` are all set.
 
 ## Backtest (build trust before trusting the rules)
 
@@ -127,19 +155,33 @@ malformed frame rather than silently scoring zero.
 ## Tests
 
 ```bash
-python -m pytest            # ~125 tests, no network required (HTTP/LLM mocked)
+python -m pytest            # ~127 tests, no network required (HTTP/LLM mocked)
 python -m pytest --cov=app  # with coverage
 ```
 
 Synthetic price series deterministically exercise each indicator and each rule
-trigger/non-trigger, plus the backtest forward-return math.
+trigger/non-trigger, the backtest forward-return math, and an **end-to-end smoke
+test** (`tests/test_smoke.py`) that runs the whole pipeline against the T212
+demo (mocked HTTP) with mocked price data.
 
 ## Scheduling
 
-A GitHub Actions workflow (`.github/workflows/daily-signals.yml`) runs the
-pipeline Mon–Fri at 22:30 UTC (after the US close), running the tests first and
-uploading the digest as an artifact. Configure the secrets referenced in the
-workflow. You can also run it any time from the Actions tab (`workflow_dispatch`).
+A GitHub Actions workflow (`.github/workflows/daily-signals.yml`) runs
+`python -m app.run` **Mon–Fri at 21:30 UTC** (after the US close), running the
+tests first and uploading the markdown digest as an artifact. Trigger it any
+time from the Actions tab (`workflow_dispatch`).
+
+Set these in the repo's **Settings → Secrets and variables → Actions**:
+
+| Secret | Needed for |
+|--------|-----------|
+| `T212_API_KEY` (+ optional `T212_API_SECRET`, `T212_BASE_URL`) | portfolio fetch |
+| `ANTHROPIC_API_KEY` | LLM rationales (falls back to templates if unset) |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | persisting signals (optional) |
+| `RESEND_API_KEY`, `DIGEST_FROM`, `DIGEST_TO` | emailing the digest (optional) |
+
+Plus an optional **variable** `SIGNAL_THRESHOLD`. Leave a secret unset and its
+stage no-ops — only `T212_API_KEY` is needed for a minimal demo run.
 
 ## Swapping the price provider
 

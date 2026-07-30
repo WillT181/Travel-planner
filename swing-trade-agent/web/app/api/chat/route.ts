@@ -22,13 +22,41 @@ export async function POST(request: Request) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const data = await upstream.json().catch(() => ({
-      error: "Agent backend returned a non-JSON response.",
-    }));
-    return NextResponse.json(data, { status: upstream.status });
-  } catch {
+    // Read as text first: a crashed backend replies with a plain-text
+    // "Internal Server Error", and blindly calling .json() threw away the only
+    // clue about what actually went wrong.
+    const raw = await upstream.text();
+    let data: unknown;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      const snippet = raw.trim().slice(0, 400);
+      return NextResponse.json(
+        {
+          error:
+            `Agent backend returned HTTP ${upstream.status} with a non-JSON body` +
+            (snippet ? `: ${snippet}` : " (empty response)") +
+            ". Check the terminal running the backend for the full traceback.",
+        },
+        { status: upstream.status === 200 ? 502 : upstream.status },
+      );
+    }
+    // FastAPI reports errors as {detail: "..."}; the UI renders {error: "..."}.
+    if (!upstream.ok && data && typeof data === "object" && !("error" in data)) {
+      const detail = (data as { detail?: unknown }).detail;
+      if (typeof detail === "string") {
+        return NextResponse.json({ error: detail }, { status: upstream.status });
+      }
+    }
+    return NextResponse.json(data as object, { status: upstream.status });
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
     return NextResponse.json(
-      { error: "Cannot reach the agent backend. Is the Python API running?" },
+      {
+        error:
+          "Cannot reach the agent backend. Is the Python API running on " +
+          `${AGENT_API_URL}? (${reason})`,
+      },
       { status: 502 },
     );
   }

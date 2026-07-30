@@ -92,3 +92,88 @@ def test_chat_503_when_anthropic_key_missing(client, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     resp = client.post("/api/chat", json={"message": "hi"})
     assert resp.status_code == 503
+
+
+class TestAgentFailuresBecomeJSON:
+    """A failing agent turn must return actionable JSON, never a plain-text 500.
+
+    Regression guard: an unhandled exception reached Starlette's default handler,
+    which replies with PLAIN TEXT, so the browser proxy could only say "the
+    backend returned a non-JSON response" and hid the real cause.
+    """
+
+    def _client_with_error(self, monkeypatch, exc):
+        from fastapi.testclient import TestClient
+
+        from app.web import server
+
+        monkeypatch.setattr(server, "_SESSIONS", {})
+        monkeypatch.setattr(server, "_client", lambda key: object())
+
+        def boom(*args, **kwargs):
+            raise exc
+
+        monkeypatch.setattr(server, "run_turn", boom)
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key")
+        return TestClient(server.app, raise_server_exceptions=False)
+
+    def test_auth_error_is_json_401_with_guidance(self, monkeypatch):
+        client = self._client_with_error(
+            monkeypatch, RuntimeError("authentication_error: invalid x-api-key")
+        )
+        resp = client.post("/api/chat", json={"message": "hi"})
+        assert resp.status_code == 401
+        assert resp.headers["content-type"].startswith("application/json")
+        assert "check-key" in resp.json()["detail"]
+
+    def test_credit_error_is_json_402(self, monkeypatch):
+        client = self._client_with_error(
+            monkeypatch, RuntimeError("Your credit balance is too low")
+        )
+        resp = client.post("/api/chat", json={"message": "hi"})
+        assert resp.status_code == 402
+        assert "credit" in resp.json()["detail"].lower()
+
+    def test_generic_error_is_json_500_naming_the_exception(self, monkeypatch):
+        client = self._client_with_error(monkeypatch, ValueError("something odd"))
+        resp = client.post("/api/chat", json={"message": "hi"})
+        assert resp.status_code == 500
+        assert "ValueError" in resp.json()["detail"]
+
+    def test_api_key_never_leaks_into_the_error(self, monkeypatch):
+        leaky = RuntimeError("failed with key sk-ant-api03-SUPERSECRETVALUE123")
+        client = self._client_with_error(monkeypatch, leaky)
+        resp = client.post("/api/chat", json={"message": "hi"})
+        assert "SUPERSECRETVALUE123" not in resp.text
+        assert "redacted" in resp.text
+
+    def test_failed_turn_does_not_corrupt_the_session(self, monkeypatch):
+        from fastapi.testclient import TestClient
+
+        from app.web import server
+
+        monkeypatch.setattr(server, "_SESSIONS", {})
+        monkeypatch.setattr(server, "_client", lambda key: object())
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key")
+
+        calls = {"n": 0}
+
+        def flaky(client, messages, text, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                messages.append({"role": "user", "content": "half-written"})
+                raise RuntimeError("boom")
+            return "recovered reply"
+
+        monkeypatch.setattr(server, "run_turn", flaky)
+        client = TestClient(server.app, raise_server_exceptions=False)
+
+        first = client.post("/api/chat", json={"message": "one"})
+        assert first.status_code == 500
+
+        second = client.post("/api/chat", json={"message": "two"})
+        assert second.status_code == 200
+        body = second.json()
+        assert body["reply"] == "recovered reply"
+        # The failed turn left no residue in the visible history.
+        assert [h["content"] for h in body["history"]] == ["two", "recovered reply"]

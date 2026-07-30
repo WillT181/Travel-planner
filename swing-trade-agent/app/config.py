@@ -72,6 +72,20 @@ def _get(name: str, default: str | None = None) -> str | None:
     return value
 
 
+def _split_symbols(raw: str | None) -> list[str]:
+    """Parse "AAPL,MSFT NVDA" into ["AAPL", "MSFT", "NVDA"] (order preserved)."""
+    if not raw:
+        return []
+    seen: set[str] = set()
+    out: list[str] = []
+    for chunk in raw.replace(",", " ").split():
+        sym = chunk.strip().upper()
+        if sym and sym not in seen:
+            seen.add(sym)
+            out.append(sym)
+    return out
+
+
 @dataclass(frozen=True)
 class Config:
     """Runtime configuration snapshot."""
@@ -81,6 +95,13 @@ class Config:
     t212_api_secret: str | None = field(default_factory=lambda: _get("T212_API_SECRET"))
     t212_base_url: str = field(
         default_factory=lambda: _get("T212_BASE_URL", DEMO_BASE_URL) or DEMO_BASE_URL
+    )
+
+    # --- Symbol universe ---
+    # Screened when Trading 212 is unconfigured/unavailable, so the whole app
+    # runs without a broker account. Accepts commas and/or whitespace.
+    watchlist: list[str] = field(
+        default_factory=lambda: _split_symbols(_get("WATCHLIST"))
     )
 
     # --- Price provider ---

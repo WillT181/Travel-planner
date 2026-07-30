@@ -52,12 +52,16 @@ def _cmd_backtest(args: argparse.Namespace) -> int:
     from app.backtest import format_report, run_backtest
     from app.prices import get_price_provider
 
-    config = load_config()
-    symbols = args.symbols
-    if not symbols:
-        from app.portfolio import fetch_positions
+    from app.symbols import SymbolSourceError, resolve_symbols
 
-        symbols = [p.ticker for p in fetch_positions(config=config) if p.quantity > 0]
+    config = load_config()
+    try:
+        universe = resolve_symbols(config, args.symbols or None)
+    except SymbolSourceError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    symbols = universe.symbols
+    print(f"Backtesting {len(symbols)} symbol(s) from {universe.source}.", file=sys.stderr)
 
     provider = get_price_provider(config, use_cache=not args.no_cache)
     price_data = {}

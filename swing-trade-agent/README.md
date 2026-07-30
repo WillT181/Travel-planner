@@ -57,10 +57,22 @@ Only `pandas`, `numpy`, `pandas-ta-classic`, `numba`, `requests`,
 (indicators/signals/backtest) and the tests. The rest (`yfinance`, `anthropic`,
 `supabase`) are needed for live data, reasoning and persistence respectively.
 
-Fill in `.env` — every variable is listed in `.env.example`. The only one
-required to run against demo is a **read-only** `T212_API_KEY`; everything else
-(Anthropic, Supabase, Resend) is optional and the pipeline degrades gracefully
-when it's unset.
+Fill in `.env` — every variable is listed in `.env.example`. Everything is
+optional and each stage degrades gracefully when unset; the one thing the app
+does need is **something to screen**, from any of:
+
+| Source | How | When it's used |
+|--------|-----|----------------|
+| Explicit list | `--symbols AAPL MSFT` (CLI) | always wins |
+| Trading 212 | read-only `T212_API_KEY` | when a key is set and positions exist |
+| **Watchlist** | `WATCHLIST=AAPL,MSFT,NVDA` in `.env` | **no broker account needed** |
+
+`app.symbols.resolve_symbols` applies that order and also falls back to the
+watchlist if Trading 212 is unreachable or holds nothing, so a broker outage
+degrades to the watchlist instead of an empty run. Set `WATCHLIST` and the
+pipeline, backtest, digest, agent and daily briefing all work with no broker
+account at all. Output states which source was used, so a watchlist screen is
+never presented as your holdings.
 
 ### Optional: Supabase persistence
 
@@ -262,13 +274,15 @@ Set these in the repo's **Settings → Secrets and variables → Actions**:
 
 | Secret | Needed for |
 |--------|-----------|
-| `T212_API_KEY` (+ optional `T212_API_SECRET`, `T212_BASE_URL`) | portfolio fetch |
+| `WATCHLIST` | symbols to screen without a broker account |
+| `T212_API_KEY` (+ optional `T212_API_SECRET`, `T212_BASE_URL`) | portfolio fetch (optional if `WATCHLIST` is set) |
 | `ANTHROPIC_API_KEY` | LLM rationales (falls back to templates if unset) |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | persisting signals (optional) |
 | `RESEND_API_KEY`, `DIGEST_FROM`, `DIGEST_TO` | emailing the digest (optional) |
 
 Plus an optional **variable** `SIGNAL_THRESHOLD`. Leave a secret unset and its
-stage no-ops — only `T212_API_KEY` is needed for a minimal demo run.
+stage no-ops — a minimal scheduled run needs only `WATCHLIST` (or
+`T212_API_KEY`) so there is something to screen.
 
 ## Swapping the price provider
 

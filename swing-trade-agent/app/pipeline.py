@@ -15,19 +15,14 @@ from app.prices import get_price_provider
 from app.prices.provider import PriceProvider
 from app.reasoning import explain_signals
 from app.signals import Signal, signal_from_ohlcv
+from app.symbols import resolve_symbols
 
 logger = logging.getLogger("swing_agent")
 
 
 def _get_symbols(config: Config, symbols: list[str] | None) -> list[str]:
-    if symbols:
-        return symbols
-    # Import lazily so the pipeline can run with an explicit symbol list even
-    # when Trading 212 credentials are absent (e.g. local experimentation).
-    from app.portfolio import fetch_positions
-
-    positions = fetch_positions(config=config)
-    return [p.ticker for p in positions if p.quantity > 0]
+    """Backwards-compatible shim: the symbol list without its source label."""
+    return list(resolve_symbols(config, symbols).symbols)
 
 
 def generate_signals(
@@ -80,12 +75,12 @@ def run_pipeline(
         config.signal_threshold,
     )
 
-    # Stage 1 — portfolio.
-    resolved = _get_symbols(config, symbols)
-    source = "explicit list" if symbols else "Trading 212 portfolio"
+    # Stage 1 — symbol universe (portfolio, watchlist, or an explicit list).
+    universe = resolve_symbols(config, symbols)
+    resolved = list(universe.symbols)
     logger.info(
-        "[1/4] Portfolio (%s): %d symbol(s) — %s",
-        source,
+        "[1/4] Symbols (%s): %d symbol(s) — %s",
+        universe.source,
         len(resolved),
         ", ".join(resolved) or "(none)",
     )

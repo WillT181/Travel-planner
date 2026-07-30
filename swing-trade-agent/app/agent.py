@@ -18,6 +18,7 @@ import json
 import sys
 
 from app.config import Config, load_config
+from app.symbols import SymbolSourceError, resolve_symbols
 
 DEFAULT_MODEL = "claude-opus-4-8"
 MAX_TOKENS = 1024
@@ -84,21 +85,33 @@ def _context():
 # ---------------------------------------------------------------------------
 
 
-def tool_get_portfolio() -> list[dict]:
-    """Current Trading 212 holdings."""
+def tool_get_portfolio() -> dict:
+    """Current Trading 212 holdings, or a clear note when none are available."""
     from app.portfolio import fetch_positions
 
     cfg, _ = _context()
-    positions = fetch_positions(config=cfg)
-    return [
-        {
-            "symbol": p.ticker,
-            "quantity": p.quantity,
-            "avg_price": p.avg_price,
-            "t212_ticker": p.raw_ticker,
+    if not cfg.t212_api_key:
+        return {
+            "holdings": [],
+            "note": (
+                "No Trading 212 account is connected, so there are no holdings to "
+                "report. Screening falls back to the configured watchlist "
+                f"({', '.join(cfg.watchlist) if cfg.watchlist else 'not set'})."
+            ),
         }
-        for p in positions
-    ]
+    positions = fetch_positions(config=cfg)
+    return {
+        "holdings": [
+            {
+                "symbol": p.ticker,
+                "quantity": p.quantity,
+                "avg_price": p.avg_price,
+                "t212_ticker": p.raw_ticker,
+            }
+            for p in positions
+        ],
+        "note": "",
+    }
 
 
 def tool_get_price_history(symbol: str, days: int = 60) -> dict:
@@ -162,9 +175,12 @@ def tool_get_signals(symbol: str | None = None) -> dict:
         report = SignalReport(signal=sig, rationale=explain_signal(sig, config=cfg))
         return {"source": "live", "signals": [report.to_row()]}
 
-    symbols = [p.ticker for p in fetch_positions(config=cfg) if p.quantity > 0]
+    try:
+        universe = resolve_symbols(cfg)
+    except SymbolSourceError as exc:
+        return {"source": "live", "signals": [], "note": str(exc)}
     signals = []
-    for sym in symbols:
+    for sym in universe.symbols:
         try:
             signals.append(
                 signal_from_ohlcv(sym, provider.get_history(sym, lookback_days=cfg.history_days))
@@ -172,18 +188,26 @@ def tool_get_signals(symbol: str | None = None) -> dict:
         except Exception:  # noqa: BLE001 - skip a bad symbol, keep the rest
             continue
     reports = explain_signals(signals, threshold=cfg.signal_threshold, config=cfg)
-    return {"source": "live", "signals": [r.to_row() for r in reports]}
+    return {
+        "source": "live",
+        # Tell the model where these came from so it never calls a watchlist
+        # screen "your holdings".
+        "symbol_source": universe.source,
+        "signals": [r.to_row() for r in reports],
+    }
 
 
 def tool_run_backtest(rule: str | None = None) -> str:
-    """Backtest summary over the portfolio (all rules, or one)."""
+    """Backtest summary over the screened universe (all rules, or one)."""
     from app.backtest import format_report, run_backtest
-    from app.portfolio import fetch_positions
 
     cfg, provider = _context()
-    symbols = [p.ticker for p in fetch_positions(config=cfg) if p.quantity > 0]
+    try:
+        universe = resolve_symbols(cfg)
+    except SymbolSourceError as exc:
+        return str(exc)
     price_data = {}
-    for sym in symbols:
+    for sym in universe.symbols:
         try:
             price_data[sym] = provider.get_history(sym, lookback_days=max(cfg.history_days, 400))
         except Exception:  # noqa: BLE001
@@ -196,7 +220,8 @@ def tool_run_backtest(rule: str | None = None) -> str:
         if rule not in report.rules:
             return f"Unknown rule '{rule}'. Available: {', '.join(report.rules)}."
         report.rules = {rule: report.rules[rule]}  # keep only the requested rule
-    return format_report(report)
+    header = f"Backtest over {len(price_data)} symbol(s) from {universe.source}.\n\n"
+    return header + format_report(report)
 
 
 def tool_get_signal_history(symbol: str, days: int = 30) -> dict:
@@ -287,15 +312,23 @@ _RULE_NAMES = [
 TOOL_DEFS = [
     {
         "name": "get_portfolio",
-        "description": "Get the user's current Trading 212 holdings (symbol, quantity, average price). Read-only.",
+        "description": (
+            "Get the user's current Trading 212 holdings (symbol, quantity, average "
+            "price). Read-only. Returns an empty list plus an explanatory `note` when "
+            "no broker account is connected — in that case the user has no holdings on "
+            "record, and screening runs over their watchlist instead."
+        ),
         "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
     },
     {
         "name": "get_signals",
         "description": (
-            "Get today's swing-trade signal reports for the whole portfolio, or "
-            "for one symbol if `symbol` is given. Reads the stored signals table "
-            "and falls back to live evaluation."
+            "Get today's swing-trade signal reports for the whole screened universe, "
+            "or for one symbol if `symbol` is given. Reads the stored signals table "
+            "and falls back to live evaluation. The response's `symbol_source` says "
+            "whether the universe came from the Trading 212 portfolio, a watchlist, "
+            "or an explicit list — describe it accurately and never call watchlist "
+            "symbols the user's holdings."
         ),
         "input_schema": {
             "type": "object",
@@ -330,7 +363,7 @@ TOOL_DEFS = [
     },
     {
         "name": "run_backtest",
-        "description": "Run the walk-forward backtest over the portfolio and return the per-rule summary vs buy-and-hold. Optionally restrict to one rule.",
+        "description": "Run the walk-forward backtest over the screened universe (portfolio or watchlist) and return the per-rule summary vs buy-and-hold. Optionally restrict to one rule.",
         "input_schema": {
             "type": "object",
             "properties": {

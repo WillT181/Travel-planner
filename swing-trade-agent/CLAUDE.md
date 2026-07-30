@@ -23,7 +23,10 @@ human to review. **It does not place trades.**
    feature and there must never be one.
 3. **Demo + read-only by default.** `T212_BASE_URL` defaults to the demo host
    and the app expects a read-only key. Do not change the default to a live
-   host.
+   host. A broker account is **optional**: `WATCHLIST` supplies the symbol
+   universe without one. Never reintroduce a direct `fetch_positions()` call in
+   a portfolio-wide code path — go through `app.symbols.resolve_symbols`, or
+   the app silently screens nothing when T212 is absent.
 4. **Secrets only via env / `.env`.** Never hard-code or commit keys.
    `.env` is gitignored; `.env.example` documents every variable.
 
@@ -51,6 +54,14 @@ app/
                        Judgment/ranking stays in the agent prompt; the assembler
                        only supplies data. write_signals stamps one timestamp per
                        run so runs group cleanly; empty/first-run handled.
+  symbols.py           resolve_symbols(config, symbols) -> SymbolSet: the ONE
+                       place that answers "what are we screening?". Order:
+                       explicit list -> T212 portfolio (when a key is set) ->
+                       WATCHLIST env var. Falls back to the watchlist when the
+                       broker is unconfigured, holds nothing, or is unreachable;
+                       raises SymbolSourceError only when no source exists. The
+                       returned `source` is surfaced to the user so a watchlist
+                       screen is never described as their holdings.
   portfolio/t212.py    READ-ONLY Trading 212 client (GET /equity/portfolio,
                        Basic auth, 429 retry/backoff) + symbol mapping
   prices/              PriceProvider interface, yfinance impl (>=250 days),

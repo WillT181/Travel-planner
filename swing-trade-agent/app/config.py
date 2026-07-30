@@ -10,14 +10,50 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# Load a local .env if python-dotenv is available. This is best-effort: the
-# app also works when env vars are exported directly (e.g. in CI).
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+ENV_FILE = PROJECT_ROOT / ".env"
+
+# Load the project's own .env if python-dotenv is available. Point at
+# PROJECT_ROOT/.env EXPLICITLY: bare load_dotenv() searches upward from the
+# current working directory, so starting the server from anywhere other than
+# swing-trade-agent/ silently found no keys. Existing environment variables
+# still win (override=False), which keeps CI and `KEY=... python -m app.run`
+# working.
+def _load_env_file_fallback(path: Path) -> None:
+    """Minimal KEY=VALUE .env reader used when python-dotenv is unavailable.
+
+    Without this, a missing/broken python-dotenv made the app silently ignore
+    .env entirely — surfacing only as a confusing "API key is not configured".
+    Existing environment variables always win, matching load_dotenv(override=False).
+    """
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        if line.lower().startswith("export "):
+            line = line[7:].lstrip()
+        name, _, value = line.partition("=")
+        name = name.strip()
+        value = value.strip().split(" #", 1)[0].strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        if name and name not in os.environ:
+            os.environ[name] = value
+
+
 try:  # pragma: no cover - trivial import guard
     from dotenv import load_dotenv
 
-    load_dotenv()
-except Exception:  # pragma: no cover
-    pass
+    load_dotenv(dotenv_path=ENV_FILE, override=False)
+    # Fall back to the upward search for unusual layouts / installed copies.
+    if not ENV_FILE.exists():
+        load_dotenv(override=False)
+except Exception:  # pragma: no cover - python-dotenv missing or broken
+    _load_env_file_fallback(ENV_FILE)
 
 
 # Default to the Trading 212 DEMO base URL. Never default to live.
@@ -26,7 +62,6 @@ DEMO_BASE_URL = "https://demo.trading212.com/api/v0"
 # Anthropic model used ONLY for turning structured signals into prose.
 DEFAULT_LLM_MODEL = "claude-opus-4-8"
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CACHE_DIR = PROJECT_ROOT / ".cache" / "prices"
 
 

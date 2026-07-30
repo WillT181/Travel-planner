@@ -24,9 +24,16 @@ if ! "$PY" -c "import uvicorn, fastapi" >/dev/null 2>&1; then
   exit 1
 fi
 
+# Make sure a .env exists at all — the app reads keys from swing-trade-agent/.env.
+if [ ! -f .env ]; then
+  cp .env.example .env 2>/dev/null && echo "Created $PWD/.env (from .env.example)."
+fi
+
 # Warn (don't block) if there's no Anthropic key — the page loads, chatting 503s.
 if ! "$PY" -c "from app.config import load_config; import sys; sys.exit(0 if load_config().anthropic_api_key else 1)" >/dev/null 2>&1; then
-  echo "⚠  ANTHROPIC_API_KEY is not set in .env — the page will load but chatting returns 503." >&2
+  echo "⚠  No ANTHROPIC_API_KEY found in $PWD/.env" >&2
+  echo "   The page will load, but chatting returns 'not configured on the server'." >&2
+  echo "   Fix it with:   bash scripts/set-key.sh" >&2
 fi
 
 # First run: install frontend deps if missing.

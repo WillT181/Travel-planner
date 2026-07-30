@@ -36,7 +36,13 @@ human to review. **It does not place trades.**
 app/
   config.py            Config dataclass loaded from env (.env via python-dotenv)
   pipeline.py          Wires the stages together (no trading)
-  run.py               CLI: `python -m app.run {run,backtest}`
+  run.py               CLI: `python -m app.run {run,backtest,doctor}`
+  doctor.py            Setup diagnostics (`make doctor`). Because every stage
+                       degrades gracefully, a misconfiguration shows up as bland
+                       empty output rather than an error — this reports each
+                       dependency's state with an actionable fix. run_checks()
+                       returns Check rows and never raises. When adding a
+                       config-dependent stage, add a check here too.
   agent.py             Interactive tool-using agent REPL (`python -m app.agent`).
                        Tools are THIN wrappers over the modules; screening-only,
                        never trades. Loop/dispatch are pure testable functions.

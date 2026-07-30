@@ -80,7 +80,15 @@ def _cmd_backtest(args: argparse.Namespace) -> int:
     return 0
 
 
-SUBCOMMANDS = {"run", "backtest"}
+def _cmd_doctor(args: argparse.Namespace) -> int:
+    from app.doctor import format_checks, run_checks
+
+    checks = run_checks(load_config())
+    print(format_checks(checks))
+    return 1 if any(c.required for c in checks) else 0
+
+
+SUBCOMMANDS = {"run", "backtest", "doctor"}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -114,6 +122,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_bt.add_argument("--history", type=int, default=750, help="lookback days to fetch")
     p_bt.add_argument("--no-cache", action="store_true")
     p_bt.set_defaults(func=_cmd_backtest)
+
+    p_doc = sub.add_parser(
+        "doctor", parents=[common], help="check the setup and report what's missing"
+    )
+    p_doc.set_defaults(func=_cmd_doctor)
 
     return parser
 

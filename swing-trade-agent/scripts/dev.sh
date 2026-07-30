@@ -44,24 +44,51 @@ fi
 
 # Free a TCP port left held by a previous run that didn't shut down cleanly
 # (common in Codespaces: Ctrl-C kills the launcher but the next/uvicorn worker
-# lingers and keeps the port, so the next start drifts to 3001, 3002, …).
-free_port() {
+# lingers and keeps the port, so the next start fails with EADDRINUSE).
+# Try several tools: no single one is guaranteed to exist in every image.
+port_pids() {
   local port="$1" pids=""
   if command -v lsof >/dev/null 2>&1; then
-    pids=$(lsof -ti "tcp:${port}" 2>/dev/null || true)
-  elif command -v fuser >/dev/null 2>&1; then
-    pids=$(fuser "${port}/tcp" 2>/dev/null || true)
+    pids=$(lsof -ti "tcp:${port}" -sTCP:LISTEN 2>/dev/null || true)
+    [ -n "$pids" ] || pids=$(lsof -ti "tcp:${port}" 2>/dev/null || true)
   fi
-  if [ -n "$pids" ]; then
-    echo "Port ${port} was busy — stopping the leftover process(es) from a previous run."
-    kill $pids 2>/dev/null || true
-    sleep 1
-    kill -9 $pids 2>/dev/null || true
+  if [ -z "$pids" ] && command -v fuser >/dev/null 2>&1; then
+    pids=$(fuser "${port}/tcp" 2>/dev/null | tr -s ' ' '\n' | grep -E '^[0-9]+$' || true)
   fi
+  if [ -z "$pids" ] && command -v ss >/dev/null 2>&1; then
+    pids=$(ss -ltnpH "sport = :${port}" 2>/dev/null \
+             | grep -oE 'pid=[0-9]+' | cut -d= -f2 || true)
+  fi
+  # Never target ourselves or our own children.
+  echo "$pids" | grep -E '^[0-9]+$' | grep -vx "$$" || true
 }
 
-free_port "$BACKEND_PORT"
-free_port 3000
+free_port() {
+  local port="$1" label="$2" pids tries=0
+  pids=$(port_pids "$port")
+  [ -n "$pids" ] || return 0
+
+  echo "Port ${port} is busy (${label}) — stopping the leftover process(es) from a previous run."
+  kill $pids 2>/dev/null || true
+
+  # Verify it actually freed; next dev re-spawns children, so escalate and
+  # re-check rather than assuming one kill + sleep 1 did the job.
+  while [ "$tries" -lt 10 ]; do
+    sleep 0.5
+    pids=$(port_pids "$port")
+    [ -n "$pids" ] || { echo "  → port ${port} is free."; return 0; }
+    tries=$((tries + 1))
+    [ "$tries" -eq 4 ] && kill -9 $pids 2>/dev/null || true
+  done
+
+  echo "✖ Port ${port} is STILL held by PID(s): $pids" >&2
+  echo "  Another 'make dev' is probably running in a different terminal tab." >&2
+  echo "  Close that tab, or run:  kill -9 $pids" >&2
+  return 1
+}
+
+free_port "$BACKEND_PORT" "backend" || exit 1
+free_port 3000 "frontend" || exit 1
 
 # Launch each server in its own process group (setsid) so cleanup can kill the
 # whole group — next dev spawns worker children that a plain kill would orphan.

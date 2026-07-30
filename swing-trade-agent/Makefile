@@ -3,17 +3,19 @@
 PY := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
 BACKEND_PORT ?= 8000
 
-.PHONY: help setup install install-web dev backend frontend test key check-key doctor
+.PHONY: help setup install install-web dev backend frontend test key check-key doctor run backtest
 
 help:
 	@echo "make setup      # one-time: create .venv, install backend + frontend, make .env"
 	@echo "make key        # create .env if needed and save your ANTHROPIC_API_KEY into it"
 	@echo "make check-key  # report whether the app can read your Anthropic key"
 	@echo "make doctor     # check the whole setup and say what's missing"
+	@echo "make backtest   # replay the rules over history vs buy-and-hold"
+	@echo "make run        # run the daily pipeline once and print the digest"
 	@echo "make dev        # run backend + frontend together  (Ctrl-C stops both)"
 	@echo "make backend    # run just the FastAPI backend on :$(BACKEND_PORT)"
 	@echo "make frontend   # run just the Next.js frontend on :3000"
-	@echo "make test       # run the Python test suite (~169 tests, no keys needed)"
+	@echo "make test       # run the Python test suite (no keys or network needed)"
 
 setup:
 	python3 -m venv .venv
@@ -34,6 +36,13 @@ key:
 
 doctor:
 	@$(PY) -m app.run doctor
+
+# ARGS lets you pass CLI flags through, e.g.  make backtest ARGS="--symbols AAPL MSFT"
+backtest:
+	@$(PY) -m app.run backtest $(ARGS)
+
+run:
+	@$(PY) -m app.run run $(ARGS)
 
 check-key:
 	@$(PY) -c "from app.config import load_config, ENV_FILE; k = load_config().anthropic_api_key or ''; \

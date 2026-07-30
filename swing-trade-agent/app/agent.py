@@ -125,6 +125,35 @@ def tool_get_portfolio() -> dict:
     }
 
 
+def tool_scan_universe() -> dict:
+    """Screen every symbol, including the ones that did NOT trigger, with reasons."""
+    from app.scan import DETAIL_LIMIT, scan_universe
+
+    cfg, provider = _context()
+    try:
+        rows = scan_universe(cfg, provider=provider)
+    except SymbolSourceError as exc:
+        return {"scanned": 0, "results": [], "note": str(exc)}
+
+    triggered = [r for r in rows if r.triggered_rules]
+    return {
+        "symbol_source": resolve_symbols(cfg).source,
+        "scanned": len(rows),
+        "threshold": cfg.signal_threshold,
+        "triggered_count": len(triggered),
+        # Diagnostics only for the leaders, so the payload stays small.
+        "results": [
+            r.to_dict(include_blockers=i < DETAIL_LIMIT) for i, r in enumerate(rows)
+        ],
+        "note": (
+            ""
+            if triggered
+            else "Nothing triggered. Setups are meant to be rare; this is a "
+            "normal quiet result, not a fault."
+        ),
+    }
+
+
 def tool_get_price_history(symbol: str, days: int = 60) -> dict:
     """Recent daily OHLCV summary for one symbol."""
     cfg, provider = _context()
@@ -338,6 +367,7 @@ TOOL_FUNCS = {
     "get_signals": tool_get_signals,
     "explain_signal": tool_explain_signal,
     "get_trade_levels": tool_get_trade_levels,
+    "scan_universe": tool_scan_universe,
     "get_price_history": tool_get_price_history,
     "run_backtest": tool_run_backtest,
     "get_signal_history": tool_get_signal_history,
@@ -415,6 +445,20 @@ TOOL_DEFS = [
             "required": ["symbol"],
             "additionalProperties": False,
         },
+    },
+    {
+        "name": "scan_universe",
+        "description": (
+            "Screen EVERY symbol in the user's universe and return them ranked by "
+            "composite score, including the ones that did NOT trigger. For the "
+            "highest-ranked symbols each non-triggering rule comes with a "
+            "`why_not_triggered` detail carrying the actual indicator values. Use "
+            "this when the user asks what's worth looking at, why nothing is "
+            "triggering, what is closest to firing, or to confirm the screen ran. "
+            "A zero-trigger result is NORMAL — say so plainly and cite the "
+            "blocking numbers; do not treat it as a fault or pad it out."
+        ),
+        "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
     },
     {
         "name": "get_price_history",

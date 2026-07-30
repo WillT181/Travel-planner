@@ -56,6 +56,7 @@ def test_tool_defs_match_registry_and_are_well_formed():
         "get_signals",
         "explain_signal",
         "get_trade_levels",
+        "scan_universe",
         "get_price_history",
         "run_backtest",
         "get_signal_history",

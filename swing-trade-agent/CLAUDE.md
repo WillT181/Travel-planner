@@ -36,6 +36,14 @@ human to review. **It does not place trades.**
 app/
   config.py            Config dataclass loaded from env (.env via python-dotenv)
   pipeline.py          Wires the stages together (no trading)
+  scan.py              scan_universe(): screens EVERY symbol with NO threshold,
+                       so non-triggering symbols are reported too, each with the
+                       per-rule `detail` explaining why it stayed quiet (the
+                       signal engine keeps only triggered rules, discarding that
+                       diagnostic). Exists so "nothing fired today" is
+                       distinguishable from "something is broken", and so the
+                       user can see what is closest. A symbol that fails becomes
+                       an error row rather than vanishing.
   run.py               CLI: `python -m app.run {run,backtest,doctor}`
   doctor.py            Setup diagnostics (`make doctor`). Because every stage
                        degrades gracefully, a misconfiguration shows up as bland

@@ -4,6 +4,8 @@ Subcommands
 -----------
 run       Run the daily pipeline and print/emit the digest.
 backtest  Replay the rules over history and print per-rule stats.
+scan      Screen every symbol now, including those that did NOT trigger.
+doctor    Check the setup and report what is missing.
 """
 
 from __future__ import annotations
@@ -80,6 +82,22 @@ def _cmd_backtest(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_scan(args: argparse.Namespace) -> int:
+    from app.prices import get_price_provider
+    from app.scan import format_scan, scan_universe
+    from app.symbols import SymbolSourceError
+
+    config = load_config()
+    try:
+        provider = get_price_provider(config, use_cache=not args.no_cache)
+        rows = scan_universe(config, args.symbols or None, provider=provider)
+    except SymbolSourceError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    print(format_scan(rows, config.signal_threshold))
+    return 0
+
+
 def _cmd_doctor(args: argparse.Namespace) -> int:
     from app.doctor import format_checks, run_checks
 
@@ -88,7 +106,7 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     return 1 if any(c.required for c in checks) else 0
 
 
-SUBCOMMANDS = {"run", "backtest", "doctor"}
+SUBCOMMANDS = {"run", "backtest", "scan", "doctor"}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -122,6 +140,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_bt.add_argument("--history", type=int, default=750, help="lookback days to fetch")
     p_bt.add_argument("--no-cache", action="store_true")
     p_bt.set_defaults(func=_cmd_backtest)
+
+    p_scan = sub.add_parser(
+        "scan", parents=[common], help="screen every symbol, including non-triggers"
+    )
+    p_scan.add_argument("--symbols", nargs="*", help="symbols (default: universe)")
+    p_scan.add_argument("--no-cache", action="store_true")
+    p_scan.set_defaults(func=_cmd_scan)
 
     p_doc = sub.add_parser(
         "doctor", parents=[common], help="check the setup and report what's missing"

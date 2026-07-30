@@ -3,13 +3,14 @@
 PY := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
 BACKEND_PORT ?= 8000
 
-.PHONY: help setup install install-web dev backend frontend test key check-key doctor run backtest
+.PHONY: help setup install install-web dev backend frontend test key check-key doctor run backtest scan
 
 help:
 	@echo "make setup      # one-time: create .venv, install backend + frontend, make .env"
 	@echo "make key        # create .env if needed and save your ANTHROPIC_API_KEY into it"
 	@echo "make check-key  # report whether the app can read your Anthropic key"
 	@echo "make doctor     # check the whole setup and say what's missing"
+	@echo "make scan       # screen every symbol now, incl. what did NOT trigger"
 	@echo "make backtest   # replay the rules over history vs buy-and-hold"
 	@echo "make run        # run the daily pipeline once and print the digest"
 	@echo "make dev        # run backend + frontend together  (Ctrl-C stops both)"
@@ -38,6 +39,9 @@ doctor:
 	@$(PY) -m app.run doctor
 
 # ARGS lets you pass CLI flags through, e.g.  make backtest ARGS="--symbols AAPL MSFT"
+scan:
+	@$(PY) -m app.run scan $(ARGS)
+
 backtest:
 	@$(PY) -m app.run backtest $(ARGS)
 

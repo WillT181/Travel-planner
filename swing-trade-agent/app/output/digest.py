@@ -6,6 +6,7 @@ import datetime as dt
 import html
 
 from app.output.models import SignalReport
+from app.signals.levels import build_trade_plan
 
 _DISCLAIMER = (
     "Decision-support only. These are algorithmically flagged setups for review, "
@@ -44,6 +45,27 @@ def render_markdown_digest(
         if sig.suggested_stop is not None:
             lines.append(f"- **Stop context (2×ATR):** {sig.suggested_stop:.2f}")
         lines.append(f"- **Key levels:** {_fmt_levels(sig.key_levels)}")
+        plan = build_trade_plan(sig)
+        if plan is not None:
+            lines.append(
+                f"- **Entry zone:** {plan.entry_low:.2f}–{plan.entry_high:.2f} "
+                f"(risk {plan.risk_per_share:.2f}/share against {plan.stop:.2f})"
+            )
+            ladder = ", ".join(f"{k} {v:.2f}" for k, v in plan.r_targets.items())
+            lines.append(f"- **R ladder:** {ladder}")
+            if plan.reward_risk is not None:
+                flag = "" if plan.meets_min_reward_risk else "  ⚠ below minimum"
+                lines.append(
+                    f"- **Reward:risk:** {plan.reward_risk:.2f} to "
+                    f"{plan.resistance_label} {plan.resistance:.2f}{flag}"
+                )
+            if plan.shares:
+                lines.append(
+                    f"- **Size at configured risk:** {plan.shares} share(s), "
+                    f"{plan.notional:.2f} notional, {plan.risk_amount:.2f} at risk"
+                )
+            for note in plan.notes:
+                lines.append(f"- _{note}_")
         lines.append("")
         lines.append(rep.rationale)
         lines.append("")

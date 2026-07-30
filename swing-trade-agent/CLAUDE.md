@@ -78,6 +78,19 @@ app/
   indicators/compute.py  add_indicators(df): RSI/MACD/SMA/EMA/Bollinger/ATR/
                        vol-SMA via pandas-ta-classic (deterministic)
   signals/
+    levels.py          build_trade_plan(signal) -> TradePlan: entry zone, risk
+                       per share, 1R/2R/3R ladder, nearest overhead level with
+                       the measured reward:risk to it, and position size when
+                       ACCOUNT_SIZE is set. Deterministic arithmetic; no LLM.
+                       TWO INVARIANTS: (1) risk is measured from the WORST fill
+                       in the zone (entry_high), never the best, so risk is not
+                       understated; (2) reward:risk is measured to real
+                       resistance, NOT to an R-multiple — a "2R target" makes
+                       R:R 2.0 by definition, which is a tautology, not
+                       information. Derived on demand rather than persisted, so
+                       sizing always reflects current config and no migration is
+                       needed. Returns None (never partial numbers) when the
+                       signal is neutral or risk would be non-positive.
     models.py          RuleResult, Signal dataclasses (the LLM's only input)
     rules.py           The five swing setups; each returns bool + 0-1 strength
     engine.py          Aggregates rules -> composite score (+ confirmation

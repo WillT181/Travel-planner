@@ -55,6 +55,17 @@ SYSTEM_PROMPT = (
     "infer causation beyond the data (say a headline 'may relate to' a move, not "
     "that it 'caused' it). Only mention news/events the tools actually returned; "
     "if a tool reports no data, say so.\n"
+    "- TRADE LEVELS: `get_trade_levels` returns the arithmetic implied by a "
+    "setup — entry zone, stop, risk per share, an R ladder, the nearest overhead "
+    "level with the measured reward:risk to it, and a position size when the user "
+    "configured one. Quote these numbers EXACTLY as returned; never recompute, "
+    "round differently, or invent a level the tool did not give you. Report them "
+    "as conditional arithmetic ('against that stop, risk is X per share'), not as "
+    "an instruction to enter. Always surface `notes` and a false "
+    "`meets_min_reward_risk` — a triggered setup with little room to the next "
+    "level is exactly the kind of thing the user needs told. Position size is a "
+    "consequence of their configured risk budget, not a recommendation to buy "
+    "that quantity.\n"
     "- You are SCREENING-ONLY. You do NOT place, modify, or cancel trades, and "
     "you do NOT give financial advice. If asked to trade or for advice on what "
     "to buy/sell, decline and explain that you only screen and explain signals.\n"
@@ -148,11 +159,46 @@ def tool_explain_signal(symbol: str) -> dict:
     from app.reasoning import explain_signal
     from app.signals import signal_from_ohlcv
 
+    from app.signals import build_trade_plan
+
     cfg, provider = _context()
     df = provider.get_history(symbol, lookback_days=cfg.history_days)
     signal = signal_from_ohlcv(symbol, df)
     rationale = explain_signal(signal, config=cfg)
-    return {**signal.to_dict(), "rationale": rationale}
+    plan = build_trade_plan(signal, config=cfg)
+    return {
+        **signal.to_dict(),
+        "rationale": rationale,
+        "trade_plan": plan.to_dict() if plan else None,
+    }
+
+
+def tool_get_trade_levels(symbol: str) -> dict:
+    """Entry zone, stop, R ladder, reward:risk and position size for one symbol."""
+    from app.signals import build_trade_plan, signal_from_ohlcv
+
+    cfg, provider = _context()
+    df = provider.get_history(symbol, lookback_days=cfg.history_days)
+    signal = signal_from_ohlcv(symbol, df)
+    plan = build_trade_plan(signal, config=cfg)
+    if plan is None:
+        reason = (
+            "no setup is triggered (direction is neutral)"
+            if signal.direction != "long"
+            else "the engine could not produce a close, ATR and stop for it"
+        )
+        return {
+            "symbol": symbol,
+            "trade_plan": None,
+            "note": f"No trade levels for {symbol}: {reason}.",
+            "composite_score": signal.composite_score,
+        }
+    return {
+        "symbol": symbol,
+        "composite_score": signal.composite_score,
+        "triggered_rules": signal.triggered_rule_names,
+        "trade_plan": plan.to_dict(),
+    }
 
 
 def tool_get_signals(symbol: str | None = None) -> dict:
@@ -291,6 +337,7 @@ TOOL_FUNCS = {
     "get_portfolio": tool_get_portfolio,
     "get_signals": tool_get_signals,
     "explain_signal": tool_explain_signal,
+    "get_trade_levels": tool_get_trade_levels,
     "get_price_history": tool_get_price_history,
     "run_backtest": tool_run_backtest,
     "get_signal_history": tool_get_signal_history,
@@ -341,6 +388,27 @@ TOOL_DEFS = [
     {
         "name": "explain_signal",
         "description": "Get the full structured signal and a plain-English rationale for one symbol.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"symbol": {"type": "string", "description": "Clean symbol, e.g. AAPL"}},
+            "required": ["symbol"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "get_trade_levels",
+        "description": (
+            "Get the concrete levels implied by a symbol's setup: entry zone, stop, "
+            "risk per share, a 1R/2R/3R target ladder, the nearest overhead level "
+            "with the measured reward:risk to it, and a position size if the user "
+            "configured an account size. All deterministic arithmetic derived from "
+            "the engine's ATR stop — quote the numbers exactly, never recompute or "
+            "adjust them. Returns `trade_plan: null` with a reason when the symbol "
+            "has no triggered setup. Present these as levels for the user to "
+            "evaluate; do not tell them to buy or sell. Read `meets_min_reward_risk` "
+            "and `notes` and surface the caveats — a triggered setup with poor "
+            "location is worth flagging as such."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {"symbol": {"type": "string", "description": "Clean symbol, e.g. AAPL"}},

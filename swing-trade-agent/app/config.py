@@ -72,6 +72,17 @@ def _get(name: str, default: str | None = None) -> str | None:
     return value
 
 
+def _get_float(name: str, default: float | None = None) -> float | None:
+    """Read a numeric env var, ignoring blanks and unparseable values."""
+    raw = _get(name)
+    if raw is None:
+        return default
+    try:
+        return float(str(raw).replace(",", "").strip())
+    except ValueError:
+        return default
+
+
 def _split_symbols(raw: str | None) -> list[str]:
     """Parse "AAPL,MSFT NVDA" into ["AAPL", "MSFT", "NVDA"] (order preserved)."""
     if not raw:
@@ -146,6 +157,22 @@ class Config:
     resend_api_key: str | None = field(default_factory=lambda: _get("RESEND_API_KEY"))
     digest_from: str | None = field(default_factory=lambda: _get("DIGEST_FROM"))
     digest_to: str | None = field(default_factory=lambda: _get("DIGEST_TO"))
+
+    # --- Trade levels / position sizing (arithmetic only; never places orders) ---
+    # Account size is opt-in: without it, levels are still computed but no share
+    # count is suggested.
+    account_size: float | None = field(
+        default_factory=lambda: _get_float("ACCOUNT_SIZE")
+    )
+    risk_per_trade_pct: float = field(
+        default_factory=lambda: _get_float("RISK_PER_TRADE_PCT", 1.0) or 1.0
+    )
+    max_position_pct: float = field(
+        default_factory=lambda: _get_float("MAX_POSITION_PCT", 20.0) or 20.0
+    )
+    min_reward_risk: float = field(
+        default_factory=lambda: _get_float("MIN_REWARD_RISK", 1.5) or 1.5
+    )
 
     # --- Pipeline tuning ---
     signal_threshold: float = field(

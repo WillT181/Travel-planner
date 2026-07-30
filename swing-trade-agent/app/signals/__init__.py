@@ -10,6 +10,7 @@ from app.signals.engine import (
     evaluate_rules,
     signal_from_ohlcv,
 )
+from app.signals.levels import TradePlan, build_trade_plan
 from app.signals.models import RuleResult, Signal
 from app.signals.rules import RULES, RULES_BY_NAME
 
@@ -21,7 +22,9 @@ __all__ = [
     "RULES_BY_NAME",
     "RuleResult",
     "Signal",
+    "TradePlan",
     "build_signal",
+    "build_trade_plan",
     "composite_score",
     "confirmation_bonus",
     "evaluate_rules",
